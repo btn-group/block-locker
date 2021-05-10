@@ -44,14 +44,17 @@ fn try_store<S: Storage, A: Api, Q: Querier>(
     let locker_name_byte_slice: &[u8] = locker_name.as_bytes();
     let mut lockers_storage = LockersStorage::from_storage(&mut deps.storage);
     let locker: Option<Locker> = lockers_storage.get_locker(&locker_name);
+    let mut response_message = String::new();
     let status: ResponseStatus = if locker.is_none() {
         let new_locker = Locker {
             password: password,
             content: content,
         };
         lockers_storage.set_locker(locker_name_byte_slice, new_locker);
+        response_message.push_str(&format!("Content stored."));
         Success
     } else {
+        response_message.push_str(&format!("Locker unavailable. Try a different locker name."));
         Failure
     };
 
@@ -60,7 +63,7 @@ fn try_store<S: Storage, A: Api, Q: Querier>(
         log: vec![],
         data: Some(to_binary(&HandleAnswer::Store {
             status,
-            message: String::from("Testing"),
+            message: response_message,
         })?),
     })
 }
@@ -73,14 +76,21 @@ mod tests {
 
     //=== HELPER FUNCTIONS ===
 
+    fn extract_message(handle_result: HandleResponse) -> String {
+        let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
+
+        match handle_result {
+            HandleAnswer::Store { status: _, message } => message,
+        }
+    }
+
     fn ensure_fail(handle_result: HandleResponse) -> bool {
         let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
 
         match handle_result {
-            HandleAnswer::Store { status, message } => {
+            HandleAnswer::Store { status, message: _ } => {
                 matches!(status, ResponseStatus::Failure { .. })
             }
-            _ => panic!("HandleAnswer not supported for success extraction"),
         }
     }
 
@@ -88,10 +98,9 @@ mod tests {
         let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
 
         match handle_result {
-            HandleAnswer::Store { status, message } => {
+            HandleAnswer::Store { status, message: _ } => {
                 matches!(status, ResponseStatus::Success { .. })
             }
-            _ => panic!("HandleAnswer not supported for success extraction"),
         }
     }
 
@@ -104,7 +113,7 @@ mod tests {
         (init(&mut deps, env), deps)
     }
 
-    // === HANDLE TESTS
+    // === HANDLE TESTS===
 
     #[test]
     fn test_handle_store() {
@@ -125,7 +134,9 @@ mod tests {
         };
         let handle_result = handle(&mut deps, mock_env("chuck", &[]), store_msg.clone());
         let result = handle_result.unwrap();
-        assert!(ensure_success(result));
+        assert!(ensure_success(result.clone()));
+        let success_message = extract_message(result);
+        success_message.contains("Content stored.");
 
         // Store for second time to same locker name
         let store_msg = HandleMsg::Store {
@@ -135,6 +146,20 @@ mod tests {
         };
         let handle_result = handle(&mut deps, mock_env("shaq", &[]), store_msg.clone());
         let result = handle_result.unwrap();
-        assert!(ensure_fail(result));
+        assert!(ensure_fail(result.clone()));
+        let error_message = extract_message(result);
+        error_message.contains("Locker unavailable. Try a different locker name.");
+
+        // Store for third time to different locker name
+        let store_msg = HandleMsg::Store {
+            locker_name: "locker name 2".to_string(),
+            password: "password".to_string(),
+            content: "mnemonic".to_string(),
+        };
+        let handle_result = handle(&mut deps, mock_env("kenny", &[]), store_msg.clone());
+        let result = handle_result.unwrap();
+        assert!(ensure_success(result.clone()));
+        let success_message = extract_message(result);
+        success_message.contains("Content stored.");
     }
 }
