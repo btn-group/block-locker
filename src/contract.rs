@@ -1,4 +1,4 @@
-use crate::msg::ResponseStatus::Success;
+use crate::msg::ResponseStatus::{Failure, Success};
 use crate::msg::{HandleAnswer, HandleMsg, ResponseStatus};
 use crate::state::{Locker, LockersStorage};
 
@@ -43,12 +43,17 @@ fn try_store<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<HandleResponse> {
     let locker_name_byte_slice: &[u8] = locker_name.as_bytes();
     let mut lockers_storage = LockersStorage::from_storage(&mut deps.storage);
-    let new_locker = Locker {
-        password: password,
-        content: content,
+    let locker: Option<Locker> = lockers_storage.get_locker(&locker_name);
+    let status: ResponseStatus = if locker.is_none() {
+        let new_locker = Locker {
+            password: password,
+            content: content,
+        };
+        lockers_storage.set_locker(locker_name_byte_slice, new_locker);
+        Success
+    } else {
+        Failure
     };
-    lockers_storage.set_locker(locker_name_byte_slice, new_locker);
-    let status: ResponseStatus = Success;
 
     Ok(HandleResponse {
         messages: vec![],
@@ -67,6 +72,17 @@ mod tests {
     use cosmwasm_std::testing::*;
 
     //=== HELPER FUNCTIONS ===
+
+    fn ensure_fail(handle_result: HandleResponse) -> bool {
+        let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
+
+        match handle_result {
+            HandleAnswer::Store { status, message } => {
+                matches!(status, ResponseStatus::Failure { .. })
+            }
+            _ => panic!("HandleAnswer not supported for success extraction"),
+        }
+    }
 
     fn ensure_success(handle_result: HandleResponse) -> bool {
         let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
@@ -110,5 +126,15 @@ mod tests {
         let handle_result = handle(&mut deps, mock_env("chuck", &[]), store_msg.clone());
         let result = handle_result.unwrap();
         assert!(ensure_success(result));
+
+        // Store for second time to same locker name
+        let store_msg = HandleMsg::Store {
+            locker_name: "locker name".to_string(),
+            password: "password".to_string(),
+            content: "mnemonic".to_string(),
+        };
+        let handle_result = handle(&mut deps, mock_env("shaq", &[]), store_msg.clone());
+        let result = handle_result.unwrap();
+        assert!(ensure_fail(result));
     }
 }
