@@ -4,20 +4,28 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleAnswer {
-    Store {
-        status: ResponseStatus,
+    Retrieve {
+        content: String,
         message: String,
+        status: ResponseStatus,
+    },
+    Store {
+        message: String,
+        status: ResponseStatus,
     },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
-    // Open {},
-    Store {
+    Retrieve {
         locker_name: String,
         password: String,
+    },
+    Store {
         content: String,
+        locker_name: String,
+        password: String,
     },
 }
 
