@@ -5,29 +5,25 @@
     {
       "type": "object",
       "required": [
-        "increment"
+        "store"
       ],
       "properties": {
-        "increment": {
-          "type": "object"
-        }
-      }
-    },
-    {
-      "type": "object",
-      "required": [
-        "reset"
-      ],
-      "properties": {
-        "reset": {
+        "store": {
           "type": "object",
           "required": [
-            "count"
+            "content",
+            "locker_name",
+            "password"
           ],
           "properties": {
-            "count": {
-              "type": "integer",
-              "format": "int32"
+            "content": {
+              "type": "string"
+            },
+            "locker_name": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
             }
           }
         }
