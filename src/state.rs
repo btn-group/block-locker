@@ -1,6 +1,5 @@
 use cosmwasm_std::{ReadonlyStorage, StdResult, Storage};
 use cosmwasm_storage::PrefixedStorage;
-use schemars::JsonSchema;
 use secret_toolkit::serialization::{Bincode2, Serde};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -9,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub const PREFIX_LOCKERS: &[u8] = b"lockers";
 
 // === LOCKERS ===
-#[derive(Serialize, Debug, Deserialize, Clone, PartialEq, JsonSchema)]
+#[derive(Serialize, Debug, Deserialize, Clone, PartialEq)]
 pub struct Locker {
     pub password: String,
     pub content: String,

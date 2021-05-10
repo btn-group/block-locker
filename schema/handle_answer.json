@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "HandleMsg",
+  "title": "HandleAnswer",
   "anyOf": [
     {
       "type": "object",
@@ -11,15 +11,19 @@
         "retrieve": {
           "type": "object",
           "required": [
-            "locker_name",
-            "password"
+            "content",
+            "message",
+            "status"
           ],
           "properties": {
-            "locker_name": {
+            "content": {
               "type": "string"
             },
-            "password": {
+            "message": {
               "type": "string"
+            },
+            "status": {
+              "$ref": "#/definitions/ResponseStatus"
             }
           }
         }
@@ -34,23 +38,28 @@
         "store": {
           "type": "object",
           "required": [
-            "content",
-            "locker_name",
-            "password"
+            "message",
+            "status"
           ],
           "properties": {
-            "content": {
+            "message": {
               "type": "string"
             },
-            "locker_name": {
-              "type": "string"
-            },
-            "password": {
-              "type": "string"
+            "status": {
+              "$ref": "#/definitions/ResponseStatus"
             }
           }
         }
       }
     }
-  ]
+  ],
+  "definitions": {
+    "ResponseStatus": {
+      "type": "string",
+      "enum": [
+        "Failure",
+        "Success"
+      ]
+    }
+  }
 }
