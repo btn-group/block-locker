@@ -24,6 +24,29 @@
           }
         }
       }
+    },
+    {
+      "type": "object",
+      "required": [
+        "get_user_locker"
+      ],
+      "properties": {
+        "get_user_locker": {
+          "type": "object",
+          "required": [
+            "status",
+            "user_locker_response"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/ResponseStatus"
+            },
+            "user_locker_response": {
+              "$ref": "#/definitions/UserLockerResponse"
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
@@ -48,6 +71,26 @@
         },
         "whitelisted_addresses": {
           "type": "array",
+          "items": {
+            "$ref": "#/definitions/HumanAddr"
+          }
+        }
+      }
+    },
+    "UserLockerResponse": {
+      "type": "object",
+      "required": [
+        "content"
+      ],
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "whitelisted_addresses": {
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "$ref": "#/definitions/HumanAddr"
           }
