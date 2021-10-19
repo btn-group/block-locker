@@ -26,6 +26,10 @@ pub enum DepositButtcoinAnswer {
         status: ResponseStatus,
         user_locker: UserLocker,
     },
+    GetUserLocker {
+        status: ResponseStatus,
+        user_locker_response: UserLockerResponse,
+    },
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
@@ -34,6 +38,9 @@ pub enum DepositButtcoinMsg {
     CreateOrUpdateLocker {
         content: Option<String>,
         whitelisted_addresses: Option<Vec<HumanAddr>>,
+    },
+    GetUserLocker {
+        address: HumanAddr,
     },
 }
 
@@ -46,4 +53,10 @@ pub enum ReceiveMsg {
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum ResponseStatus {
     Success,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct UserLockerResponse {
+    pub content: String,
+    pub whitelisted_addresses: Option<Vec<HumanAddr>>,
 }

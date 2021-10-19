@@ -29,6 +29,25 @@
           }
         }
       }
+    },
+    {
+      "type": "object",
+      "required": [
+        "get_user_locker"
+      ],
+      "properties": {
+        "get_user_locker": {
+          "type": "object",
+          "required": [
+            "address"
+          ],
+          "properties": {
+            "address": {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {

@@ -1,6 +1,8 @@
 use crate::authorize::authorize;
 use crate::msg::ResponseStatus::Success;
-use crate::msg::{DepositButtcoinAnswer, DepositButtcoinMsg, HandleMsg, InitMsg, ReceiveMsg};
+use crate::msg::{
+    DepositButtcoinAnswer, DepositButtcoinMsg, HandleMsg, InitMsg, ReceiveMsg, UserLockerResponse,
+};
 use crate::state::{Config, UserLocker};
 use cosmwasm_std::{
     from_binary, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse,
@@ -54,81 +56,22 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     pad_handle_result(response, BLOCK_SIZE)
 }
 
-fn deposit_buttcoin<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    env: Env,
-    from: HumanAddr,
-    amount: Uint128,
-    hook: Binary,
-) -> StdResult<HandleResponse> {
-    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
-    // Ensure that the sent tokens are Buttcoins
-    authorize(config.buttcoin.address.clone(), env.message.sender.clone())?;
-    // Ensure that amount sent in is 1 Buttcoin
-    if amount != Uint128(AMOUNT_FOR_TRANSACTION) {
-        return Err(StdError::generic_err(format!(
-            "Amount sent in: {}. Amount required {}.",
-            amount,
-            Uint128(AMOUNT_FOR_TRANSACTION)
-        )));
-    }
-
-    let hook_msg = from_binary(&hook)?;
-    match hook_msg {
-        DepositButtcoinMsg::CreateOrUpdateLocker {
-            content,
-            whitelisted_addresses,
-        } => create_or_update_locker(deps, from, config, content, whitelisted_addresses),
-    }
+fn amount_of_buttcoin_to_send_to_user(buttcoin_balance: u128) -> u128 {
+    let minumum_applicable_balance: u128 = 5;
+    let amount: u128 = if buttcoin_balance < minumum_applicable_balance {
+        0
+    } else {
+        let mut rng = rand::thread_rng();
+        let random_number: u128 = rng.gen_range(1..=WINNING_NUMBER);
+        if random_number == WINNING_NUMBER {
+            let random_number_two = rng.gen_range(1..=minumum_applicable_balance);
+            buttcoin_balance * random_number_two / minumum_applicable_balance
+        } else {
+            0
+        }
+    };
+    amount
 }
-
-fn receive<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    env: Env,
-    from: HumanAddr,
-    amount: Uint128,
-    msg: Binary,
-) -> StdResult<HandleResponse> {
-    let msg: ReceiveMsg = from_binary(&msg)?;
-    match msg {
-        ReceiveMsg::DepositButtcoin { hook } => deposit_buttcoin(deps, env, from, amount, hook),
-    }
-}
-
-// fn try_retrieve<S: Storage, A: Api, Q: Querier>(
-//     deps: &mut Extern<S, A, Q>,
-//     _env: Env,
-//     locker_name: String,
-//     password: String,
-// ) -> StdResult<HandleResponse> {
-//     let mut content: String = "".to_string();
-//     let lockers_storage = LockersStorage::from_storage(&mut deps.storage);
-//     let locker: Option<Locker> = lockers_storage.get_locker(&locker_name);
-//     let mut response_message = String::new();
-//     let status: ResponseStatus = if locker.is_none() {
-//         response_message.push_str(&format!("That combination does not exist."));
-//         Failure
-//     } else {
-//         let locker_object: Locker = locker.unwrap();
-//         if password == locker_object.password {
-//             content = locker_object.content;
-//             Success
-//         } else {
-//             response_message.push_str(&format!("That combination does not exist."));
-//             Failure
-//         }
-//     };
-
-//     Ok(HandleResponse {
-//         messages: vec![],
-//         log: vec![],
-//         data: Some(to_binary(&HandleAnswer::Retrieve {
-//             content: content,
-//             status,
-//             message: response_message,
-//         })?),
-//     })
-// }
 
 fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -176,21 +119,98 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
     })
 }
 
-fn amount_of_buttcoin_to_send_to_user(buttcoin_balance: u128) -> u128 {
-    let minumum_applicable_balance: u128 = 5;
-    let amount: u128 = if buttcoin_balance < minumum_applicable_balance {
-        0
-    } else {
-        let mut rng = rand::thread_rng();
-        let random_number: u128 = rng.gen_range(1..=WINNING_NUMBER);
-        if random_number == WINNING_NUMBER {
-            let random_number_two = rng.gen_range(1..=minumum_applicable_balance);
-            buttcoin_balance * random_number_two / minumum_applicable_balance
-        } else {
-            0
+fn deposit_buttcoin<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    from: HumanAddr,
+    amount: Uint128,
+    hook: Binary,
+) -> StdResult<HandleResponse> {
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
+    // Ensure that the sent tokens are Buttcoins
+    authorize(config.buttcoin.address.clone(), env.message.sender.clone())?;
+    // Ensure that amount sent in is 1 Buttcoin
+    if amount != Uint128(AMOUNT_FOR_TRANSACTION) {
+        return Err(StdError::generic_err(format!(
+            "Amount sent in: {}. Amount required {}.",
+            amount,
+            Uint128(AMOUNT_FOR_TRANSACTION)
+        )));
+    }
+
+    let hook_msg = from_binary(&hook)?;
+    match hook_msg {
+        DepositButtcoinMsg::CreateOrUpdateLocker {
+            content,
+            whitelisted_addresses,
+        } => create_or_update_locker(deps, from, config, content, whitelisted_addresses),
+        DepositButtcoinMsg::GetUserLocker { address } => {
+            get_user_locker(deps, from, config, address)
+        }
+    }
+}
+
+fn get_user_locker<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    from: HumanAddr,
+    mut config: Config,
+    address: HumanAddr,
+) -> StdResult<HandleResponse> {
+    // Find or initialize User locker
+    let user_locker_store = TypedStore::<UserLocker, S>::attach(&deps.storage);
+    let user_locker = user_locker_store
+        .load(address.0.as_bytes())
+        .unwrap_or(UserLocker {
+            content: "".to_string(),
+            whitelisted_addresses: vec![],
+        });
+    let mut user_locker_response: UserLockerResponse = UserLockerResponse {
+        content: user_locker.content,
+        whitelisted_addresses: Some(user_locker.whitelisted_addresses.clone()),
+    };
+    if from != address {
+        user_locker_response.whitelisted_addresses = None;
+        if !user_locker.whitelisted_addresses.contains(&from) {
+            user_locker_response.content = "".to_string();
         }
     };
-    amount
+
+    // Send amount to user
+    let amount_to_send_to_user: u128 =
+        amount_of_buttcoin_to_send_to_user(config.buttcoin_balance.u128() + 1);
+    config.buttcoin_balance = Uint128(config.buttcoin_balance.u128() + 1 - amount_to_send_to_user);
+    TypedStoreMut::attach(&mut deps.storage)
+        .store(CONFIG_KEY, &config)
+        .unwrap();
+
+    Ok(HandleResponse {
+        messages: vec![snip20::transfer_msg(
+            from,
+            Uint128(amount_to_send_to_user),
+            None,
+            BLOCK_SIZE,
+            config.buttcoin.contract_hash,
+            config.buttcoin.address,
+        )?],
+        log: vec![],
+        data: Some(to_binary(&DepositButtcoinAnswer::GetUserLocker {
+            status: Success,
+            user_locker_response: user_locker_response,
+        })?),
+    })
+}
+
+fn receive<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    from: HumanAddr,
+    amount: Uint128,
+    msg: Binary,
+) -> StdResult<HandleResponse> {
+    let msg: ReceiveMsg = from_binary(&msg)?;
+    match msg {
+        ReceiveMsg::DepositButtcoin { hook } => deposit_buttcoin(deps, env, from, amount, hook),
+    }
 }
 
 #[cfg(test)]
@@ -498,51 +518,4 @@ mod tests {
             .unwrap()
         );
     }
-
-    // #[test]
-    // fn test_handle_store() {
-    //     let content = "mnemonic".to_string();
-    //     let locker_name = "tntlocker".to_string();
-    //     let password = "bbblllaaazzzeeerrrsss!!!2220002221111".to_string();
-
-    //     // Initialize
-    //     let (init_result, mut deps) = init_helper();
-
-    //     assert!(
-    //         init_result.is_ok(),
-    //         "Init failed: {}",
-    //         init_result.err().unwrap()
-    //     );
-
-    //     // Store for first time
-    //     let store_msg = HandleMsg::Store {
-    //         locker_name: locker_name.clone(),
-    //         password: password.clone(),
-    //         content: content.clone(),
-    //     };
-    //     let handle_result = handle(&mut deps, mock_env("chuck", &[]), store_msg.clone());
-    //     let result = handle_result.unwrap();
-    //     assert!(ensure_success(result.clone()));
-    //     let success_message = extract_message(result);
-    //     success_message.contains("Content stored.");
-
-    //     // Store for second time to same locker name
-    //     let handle_result = handle(&mut deps, mock_env("shaq", &[]), store_msg);
-    //     let result = handle_result.unwrap();
-    //     assert!(ensure_fail(result.clone()));
-    //     let error_message = extract_message(result);
-    //     error_message.contains("Locker unavailable. Try a different locker name.");
-
-    //     // Store for third time to different locker name
-    //     let store_msg = HandleMsg::Store {
-    //         locker_name: "locker name 2".to_string(),
-    //         password: password,
-    //         content: content,
-    //     };
-    //     let handle_result = handle(&mut deps, mock_env("kenny", &[]), store_msg.clone());
-    //     let result = handle_result.unwrap();
-    //     assert!(ensure_success(result.clone()));
-    //     let success_message = extract_message(result);
-    //     success_message.contains("Content stored.");
-    // }
 }
