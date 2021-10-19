@@ -1,8 +1,20 @@
-use cosmwasm_std::{ReadonlyStorage, StdResult, Storage};
+use cosmwasm_std::{HumanAddr, ReadonlyStorage, StdResult, Storage};
 use cosmwasm_storage::PrefixedStorage;
+use schemars::JsonSchema;
 use secret_toolkit::serialization::{Bincode2, Serde};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, JsonSchema)]
+pub struct SecretContract {
+    pub address: HumanAddr,
+    pub contract_hash: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Config {
+    pub buttcoin: SecretContract,
+}
 
 // === STORAGE PREFIXES ===
 pub const PREFIX_LOCKERS: &[u8] = b"lockers";
