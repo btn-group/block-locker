@@ -1,16 +1,17 @@
-use crate::msg::ResponseStatus::{Failure, Success};
-use crate::msg::{HandleAnswer, HandleMsg, InitMsg, ResponseStatus};
-use crate::state::{Config, Locker, LockersStorage};
-
+use crate::authorize::authorize;
+use crate::msg::ResponseStatus::Success;
+use crate::msg::{DepositButtcoinAnswer, DepositButtcoinMsg, HandleMsg, InitMsg, ReceiveMsg};
+use crate::state::{Config, UserLocker};
 use cosmwasm_std::{
-    to_binary, Api, Env, Extern, HandleResponse, InitResponse, Querier, StdResult, Storage,
+    from_binary, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse,
+    Querier, StdError, StdResult, Storage, Uint128,
 };
 use secret_toolkit::snip20;
-use secret_toolkit::storage::TypedStoreMut;
+use secret_toolkit::storage::{TypedStore, TypedStoreMut};
 use secret_toolkit::utils::pad_handle_result;
-use std::string::String;
 
 // pad handle responses and log attributes to blocks of 256 bytes to prevent leaking info based on response size
+pub const AMOUNT_FOR_TRANSACTION: u128 = 1_000_000;
 pub const BLOCK_SIZE: usize = 256;
 pub const CONFIG_KEY: &[u8] = b"config";
 
@@ -22,6 +23,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     let mut config_store = TypedStoreMut::attach(&mut deps.storage);
     let config: Config = Config {
         buttcoin: msg.buttcoin.clone(),
+        buttcoin_balance: Uint128(0),
     };
     config_store.store(CONFIG_KEY, &config)?;
 
@@ -43,84 +45,122 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     let response = match msg {
-        HandleMsg::Store {
-            locker_name,
-            password,
-            content,
-        } => try_store(deps, env, locker_name, password, content),
-        HandleMsg::Retrieve {
-            locker_name,
-            password,
-        } => try_retrieve(deps, env, locker_name, password),
+        HandleMsg::Receive {
+            from, amount, msg, ..
+        } => receive(deps, env, from, amount, msg),
     };
     pad_handle_result(response, BLOCK_SIZE)
 }
 
-fn try_retrieve<S: Storage, A: Api, Q: Querier>(
+fn deposit_buttcoin<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-    _env: Env,
-    locker_name: String,
-    password: String,
+    env: Env,
+    from: HumanAddr,
+    amount: Uint128,
+    hook: Binary,
 ) -> StdResult<HandleResponse> {
-    let mut content: String = "".to_string();
-    let lockers_storage = LockersStorage::from_storage(&mut deps.storage);
-    let locker: Option<Locker> = lockers_storage.get_locker(&locker_name);
-    let mut response_message = String::new();
-    let status: ResponseStatus = if locker.is_none() {
-        response_message.push_str(&format!("That combination does not exist."));
-        Failure
-    } else {
-        let locker_object: Locker = locker.unwrap();
-        if password == locker_object.password {
-            content = locker_object.content;
-            Success
-        } else {
-            response_message.push_str(&format!("That combination does not exist."));
-            Failure
-        }
-    };
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
+    // Ensure that the sent tokens are Buttcoins
+    authorize(config.buttcoin.address.clone(), env.message.sender.clone())?;
+    // Ensure that amount sent in is 1 Buttcoin
+    if amount != Uint128(AMOUNT_FOR_TRANSACTION) {
+        return Err(StdError::generic_err(format!(
+            "Amount sent in: {}. Amount required {}.",
+            amount,
+            Uint128(AMOUNT_FOR_TRANSACTION)
+        )));
+    }
 
-    Ok(HandleResponse {
-        messages: vec![],
-        log: vec![],
-        data: Some(to_binary(&HandleAnswer::Retrieve {
-            content: content,
-            status,
-            message: response_message,
-        })?),
-    })
+    let hook_msg = from_binary(&hook)?;
+    match hook_msg {
+        DepositButtcoinMsg::CreateOrUpdateLocker {
+            content,
+            whitelisted_addresses,
+        } => create_or_update_locker(deps, from, config, content, whitelisted_addresses),
+    }
 }
 
-fn try_store<S: Storage, A: Api, Q: Querier>(
+fn receive<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-    _env: Env,
-    locker_name: String,
-    password: String,
-    content: String,
+    env: Env,
+    from: HumanAddr,
+    amount: Uint128,
+    msg: Binary,
 ) -> StdResult<HandleResponse> {
-    let locker_name_byte_slice: &[u8] = locker_name.as_bytes();
-    let mut lockers_storage = LockersStorage::from_storage(&mut deps.storage);
-    let locker: Option<Locker> = lockers_storage.get_locker(&locker_name);
-    let mut response_message = String::new();
-    let status: ResponseStatus = if locker.is_none() {
-        let new_locker = Locker {
-            password: password,
-            content: content,
-        };
-        lockers_storage.set_locker(locker_name_byte_slice, new_locker);
-        response_message.push_str(&format!("Content stored."));
-        Success
-    } else {
-        response_message.push_str(&format!("Locker unavailable. Try a different locker name."));
-        Failure
-    };
+    let msg: ReceiveMsg = from_binary(&msg)?;
+    match msg {
+        ReceiveMsg::DepositButtcoin { hook } => deposit_buttcoin(deps, env, from, amount, hook),
+    }
+}
+
+// fn try_retrieve<S: Storage, A: Api, Q: Querier>(
+//     deps: &mut Extern<S, A, Q>,
+//     _env: Env,
+//     locker_name: String,
+//     password: String,
+// ) -> StdResult<HandleResponse> {
+//     let mut content: String = "".to_string();
+//     let lockers_storage = LockersStorage::from_storage(&mut deps.storage);
+//     let locker: Option<Locker> = lockers_storage.get_locker(&locker_name);
+//     let mut response_message = String::new();
+//     let status: ResponseStatus = if locker.is_none() {
+//         response_message.push_str(&format!("That combination does not exist."));
+//         Failure
+//     } else {
+//         let locker_object: Locker = locker.unwrap();
+//         if password == locker_object.password {
+//             content = locker_object.content;
+//             Success
+//         } else {
+//             response_message.push_str(&format!("That combination does not exist."));
+//             Failure
+//         }
+//     };
+
+//     Ok(HandleResponse {
+//         messages: vec![],
+//         log: vec![],
+//         data: Some(to_binary(&HandleAnswer::Retrieve {
+//             content: content,
+//             status,
+//             message: response_message,
+//         })?),
+//     })
+// }
+
+fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    from: HumanAddr,
+    mut config: Config,
+    content: Option<String>,
+    whitelisted_addresses: Option<Vec<HumanAddr>>,
+) -> StdResult<HandleResponse> {
+    // Find or initialize User locker
+    let mut user_locker_store = TypedStoreMut::<UserLocker, S>::attach(&mut deps.storage);
+    let mut user_locker = user_locker_store
+        .load(from.0.as_bytes())
+        .unwrap_or(UserLocker {
+            whitelisted_addresses: vec![],
+            content: "".to_string(),
+        });
+    if content.is_some() {
+        user_locker.content = content.unwrap();
+    }
+    if whitelisted_addresses.is_some() {
+        user_locker.whitelisted_addresses = whitelisted_addresses.unwrap();
+    }
+    user_locker_store.store(from.0.as_bytes(), &user_locker)?;
+    config.buttcoin_balance = Uint128(config.buttcoin_balance.u128() + 1);
+    TypedStoreMut::attach(&mut deps.storage)
+        .store(CONFIG_KEY, &config)
+        .unwrap();
 
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::Store {
-            status,
-            message: response_message,
+        data: Some(to_binary(&DepositButtcoinAnswer::CreateOrUpdateLocker {
+            status: Success,
+            user_locker: user_locker,
         })?),
     })
 }
@@ -130,53 +170,53 @@ mod tests {
     use super::*;
     use crate::state::SecretContract;
     use cosmwasm_std::testing::*;
-    use cosmwasm_std::{from_binary, HumanAddr};
+    use cosmwasm_std::HumanAddr;
 
     //=== HELPER FUNCTIONS ===
 
-    fn extract_content(handle_result: HandleResponse) -> String {
-        let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
+    // fn extract_content(handle_result: HandleResponse) -> String {
+    //     let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
 
-        match handle_result {
-            HandleAnswer::Retrieve { content, .. } => content,
-            _ => panic!("Content not allowed"),
-        }
-    }
+    //     match handle_result {
+    //         HandleAnswer::Retrieve { content, .. } => content,
+    //         _ => panic!("Content not allowed"),
+    //     }
+    // }
 
-    fn extract_message(handle_result: HandleResponse) -> String {
-        let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
+    // fn extract_message(handle_result: HandleResponse) -> String {
+    //     let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
 
-        match handle_result {
-            HandleAnswer::Retrieve { message, .. } => message,
-            HandleAnswer::Store { message, .. } => message,
-        }
-    }
+    //     match handle_result {
+    //         HandleAnswer::Retrieve { message, .. } => message,
+    //         HandleAnswer::Store { message, .. } => message,
+    //     }
+    // }
 
-    fn ensure_fail(handle_result: HandleResponse) -> bool {
-        let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
+    // fn ensure_fail(handle_result: HandleResponse) -> bool {
+    //     let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
 
-        match handle_result {
-            HandleAnswer::Retrieve { status, .. } => {
-                matches!(status, ResponseStatus::Failure { .. })
-            }
-            HandleAnswer::Store { status, .. } => {
-                matches!(status, ResponseStatus::Failure { .. })
-            }
-        }
-    }
+    //     match handle_result {
+    //         HandleAnswer::Retrieve { status, .. } => {
+    //             matches!(status, ResponseStatus::Failure { .. })
+    //         }
+    //         HandleAnswer::Store { status, .. } => {
+    //             matches!(status, ResponseStatus::Failure { .. })
+    //         }
+    //     }
+    // }
 
-    fn ensure_success(handle_result: HandleResponse) -> bool {
-        let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
+    // fn ensure_success(handle_result: HandleResponse) -> bool {
+    //     let handle_result: HandleAnswer = from_binary(&handle_result.data.unwrap()).unwrap();
 
-        match handle_result {
-            HandleAnswer::Retrieve { status, .. } => {
-                matches!(status, ResponseStatus::Success { .. })
-            }
-            HandleAnswer::Store { status, .. } => {
-                matches!(status, ResponseStatus::Success { .. })
-            }
-        }
-    }
+    //     match handle_result {
+    //         HandleAnswer::Retrieve { status, .. } => {
+    //             matches!(status, ResponseStatus::Success { .. })
+    //         }
+    //         HandleAnswer::Store { status, .. } => {
+    //             matches!(status, ResponseStatus::Success { .. })
+    //         }
+    //     }
+    // }
 
     fn init_helper() -> (
         StdResult<InitResponse>,
@@ -206,13 +246,9 @@ mod tests {
     // === HANDLE TESTS===
 
     #[test]
-    fn test_handle_retrieve() {
+    fn test_handle_create_or_update_locker() {
         let content: String = "mnemonic".to_string();
-        let storer: String = "chuck".to_string();
-        let different_user: String = "ernie".to_string();
-        let locker_name = "tntlocker".to_string();
-        let password = "bbblllaaazzzeeerrrsss!!!2220002221111".to_string();
-
+        let wrong_amount: Uint128 = Uint128(AMOUNT_FOR_TRANSACTION - 1);
         // Initialize
         let (init_result, mut deps) = init_helper();
 
@@ -222,115 +258,152 @@ mod tests {
             init_result.err().unwrap()
         );
 
-        // Store for first time
-        let store_msg = HandleMsg::Store {
-            locker_name: locker_name.clone(),
-            password: password.clone(),
-            content: content.clone(),
+        // when the user has not created a locker yet
+        let create_or_update_locker_msg = DepositButtcoinMsg::CreateOrUpdateLocker {
+            content: Some(content.clone()),
+            whitelisted_addresses: Some(vec![HumanAddr::from("secret12345678910")]),
         };
-        let handle_result = handle(&mut deps, mock_env(storer.clone(), &[]), store_msg.clone());
-        let result = handle_result.unwrap();
-        assert!(ensure_success(result.clone()));
-        let success_message = extract_message(result);
-        success_message.contains("Content stored.");
-
-        // Retrieve as same user with correct lockername and password
-        let retrieve_msg = HandleMsg::Retrieve {
-            locker_name: locker_name.clone(),
-            password: password.clone(),
+        let deposit_buttcoin_msg = ReceiveMsg::DepositButtcoin {
+            hook: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+        };
+        // = when sent token is not Buttcoin
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_user_address(), &[]),
+            receive_msg.clone(),
+        );
+        // = * it raises an error
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::Unauthorized { backtrace: None }
+        );
+        // = when sent token is Buttcoin
+        // == when sent amount of token is the wrong amount
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: wrong_amount,
+            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+        };
+        // == * it raises an error
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::generic_err(format!(
+                "Amount sent in: {}. Amount required {}.",
+                wrong_amount,
+                Uint128(AMOUNT_FOR_TRANSACTION)
+            ))
+        );
+        // == when sent amount of tokens is the right amount
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
         };
         let handle_result = handle(
             &mut deps,
-            mock_env(storer.clone(), &[]),
-            retrieve_msg.clone(),
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
         );
-        let result = handle_result.unwrap();
-        assert!(ensure_success(result.clone()));
-        let success_message = extract_message(result.clone());
-        success_message.contains("");
-        let retrieved_content = extract_content(result);
-        retrieved_content.contains(&content);
+        // == * it sets the locker for the user
+        // let user_locker_store = TypedStoreMut::<UserLocker, S>::attach(&mut deps.storage);
+        // let user_locker = user_locker_store
+        //     .load(from.0.as_bytes())
+        //     .unwrap();
+        // assert_eq!(user_locker.content, content)
+        // assert_eq!(user_locker.whitelisted_addresses, vec![HumanAddr::from("secret12345678910")])
 
-        // Retrieve as different user with correct lockername and password
-        let handle_result = handle(&mut deps, mock_env(different_user, &[]), retrieve_msg);
-        let result = handle_result.unwrap();
-        assert!(ensure_success(result.clone()));
-        let success_message = extract_message(result.clone());
-        success_message.contains("");
-        let retrieved_content = extract_content(result);
-        retrieved_content.contains(&content);
+        // == * it increases the balance of BUTT in config by 1
+        let config: Config = TypedStoreMut::attach(&mut deps.storage)
+            .load(CONFIG_KEY)
+            .unwrap();
+        assert_eq!(config.buttcoin_balance, Uint128(1));
 
-        // Retrieve as same user with wrong lockername and correct password
-        let retrieve_msg = HandleMsg::Retrieve {
-            locker_name: "wrong locker name".to_string(),
-            password: password.clone(),
-        };
-        let handle_result = handle(
-            &mut deps,
-            mock_env(storer.clone(), &[]),
-            retrieve_msg.clone(),
+        // == * it sends a transer message to the user for BUTT
+        let handle_result_unwrapped = handle_result.unwrap();
+        // assert_eq!(
+        //     handle_result_unwrapped.messages,
+        //     vec![snip20::set_viewing_key_msg(
+        //         VIEWING_KEY.to_string(),
+        //         None,
+        //         RESPONSE_BLOCK_SIZE,
+        //         mock_buttcoin().contract_hash,
+        //         mock_buttcoin().address,
+        //     )
+        //     .unwrap()],
+        // );
+        // == * it returns the locker details to the user
+        let handle_result_data: DepositButtcoinAnswer =
+            from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
+        assert_eq!(
+            to_binary(&handle_result_data).unwrap(),
+            to_binary(&DepositButtcoinAnswer::CreateOrUpdateLocker {
+                status: Success,
+                user_locker: UserLocker {
+                    content: content,
+                    whitelisted_addresses: vec![HumanAddr::from("secret12345678910")]
+                },
+            })
+            .unwrap()
         );
-        let result = handle_result.unwrap();
-        assert!(ensure_fail(result.clone()));
-        let error_message = extract_message(result);
-        error_message.contains("That combination does not exist.");
-
-        // Retrieve as same user with correct lockername and wrong password
-        let retrieve_msg = HandleMsg::Retrieve {
-            locker_name: locker_name,
-            password: "wrong password".to_string(),
-        };
-        let handle_result = handle(&mut deps, mock_env(storer, &[]), retrieve_msg.clone());
-        let result = handle_result.unwrap();
-        assert!(ensure_fail(result.clone()));
-        let error_message = extract_message(result);
-        error_message.contains("That combination does not exist.");
     }
 
-    #[test]
-    fn test_handle_store() {
-        let content = "mnemonic".to_string();
-        let locker_name = "tntlocker".to_string();
-        let password = "bbblllaaazzzeeerrrsss!!!2220002221111".to_string();
+    // #[test]
+    // fn test_handle_store() {
+    //     let content = "mnemonic".to_string();
+    //     let locker_name = "tntlocker".to_string();
+    //     let password = "bbblllaaazzzeeerrrsss!!!2220002221111".to_string();
 
-        // Initialize
-        let (init_result, mut deps) = init_helper();
+    //     // Initialize
+    //     let (init_result, mut deps) = init_helper();
 
-        assert!(
-            init_result.is_ok(),
-            "Init failed: {}",
-            init_result.err().unwrap()
-        );
+    //     assert!(
+    //         init_result.is_ok(),
+    //         "Init failed: {}",
+    //         init_result.err().unwrap()
+    //     );
 
-        // Store for first time
-        let store_msg = HandleMsg::Store {
-            locker_name: locker_name.clone(),
-            password: password.clone(),
-            content: content.clone(),
-        };
-        let handle_result = handle(&mut deps, mock_env("chuck", &[]), store_msg.clone());
-        let result = handle_result.unwrap();
-        assert!(ensure_success(result.clone()));
-        let success_message = extract_message(result);
-        success_message.contains("Content stored.");
+    //     // Store for first time
+    //     let store_msg = HandleMsg::Store {
+    //         locker_name: locker_name.clone(),
+    //         password: password.clone(),
+    //         content: content.clone(),
+    //     };
+    //     let handle_result = handle(&mut deps, mock_env("chuck", &[]), store_msg.clone());
+    //     let result = handle_result.unwrap();
+    //     assert!(ensure_success(result.clone()));
+    //     let success_message = extract_message(result);
+    //     success_message.contains("Content stored.");
 
-        // Store for second time to same locker name
-        let handle_result = handle(&mut deps, mock_env("shaq", &[]), store_msg);
-        let result = handle_result.unwrap();
-        assert!(ensure_fail(result.clone()));
-        let error_message = extract_message(result);
-        error_message.contains("Locker unavailable. Try a different locker name.");
+    //     // Store for second time to same locker name
+    //     let handle_result = handle(&mut deps, mock_env("shaq", &[]), store_msg);
+    //     let result = handle_result.unwrap();
+    //     assert!(ensure_fail(result.clone()));
+    //     let error_message = extract_message(result);
+    //     error_message.contains("Locker unavailable. Try a different locker name.");
 
-        // Store for third time to different locker name
-        let store_msg = HandleMsg::Store {
-            locker_name: "locker name 2".to_string(),
-            password: password,
-            content: content,
-        };
-        let handle_result = handle(&mut deps, mock_env("kenny", &[]), store_msg.clone());
-        let result = handle_result.unwrap();
-        assert!(ensure_success(result.clone()));
-        let success_message = extract_message(result);
-        success_message.contains("Content stored.");
-    }
+    //     // Store for third time to different locker name
+    //     let store_msg = HandleMsg::Store {
+    //         locker_name: "locker name 2".to_string(),
+    //         password: password,
+    //         content: content,
+    //     };
+    //     let handle_result = handle(&mut deps, mock_env("kenny", &[]), store_msg.clone());
+    //     let result = handle_result.unwrap();
+    //     assert!(ensure_success(result.clone()));
+    //     let success_message = extract_message(result);
+    //     success_message.contains("Content stored.");
+    // }
 }
