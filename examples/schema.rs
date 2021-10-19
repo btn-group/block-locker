@@ -1,5 +1,5 @@
 use block_locker::msg::{
-    DepositButtcoinAnswer, DepositButtcoinMsg, HandleMsg, InitMsg, ReceiveAnswer, ReceiveMsg,
+    DepositButtcoinAnswer, DepositButtcoinMsg, HandleMsg, InitMsg, ReceiveMsg,
 };
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
 use std::env::current_dir;
@@ -14,6 +14,5 @@ fn main() {
     export_schema(&schema_for!(DepositButtcoinMsg), &out_dir);
     export_schema(&schema_for!(InitMsg), &out_dir);
     export_schema(&schema_for!(HandleMsg), &out_dir);
-    export_schema(&schema_for!(ReceiveAnswer), &out_dir);
     export_schema(&schema_for!(ReceiveMsg), &out_dir);
 }
