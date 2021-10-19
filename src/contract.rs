@@ -1,21 +1,40 @@
 use crate::msg::ResponseStatus::{Failure, Success};
-use crate::msg::{HandleAnswer, HandleMsg, ResponseStatus};
-use crate::state::{Locker, LockersStorage};
+use crate::msg::{HandleAnswer, HandleMsg, InitMsg, ResponseStatus};
+use crate::state::{Config, Locker, LockersStorage};
 
 use cosmwasm_std::{
     to_binary, Api, Env, Extern, HandleResponse, InitResponse, Querier, StdResult, Storage,
 };
+use secret_toolkit::snip20;
+use secret_toolkit::storage::TypedStoreMut;
 use secret_toolkit::utils::pad_handle_result;
 use std::string::String;
 
 // pad handle responses and log attributes to blocks of 256 bytes to prevent leaking info based on response size
 pub const BLOCK_SIZE: usize = 256;
+pub const CONFIG_KEY: &[u8] = b"config";
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
-    _deps: &mut Extern<S, A, Q>,
-    _env: Env,
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    msg: InitMsg,
 ) -> StdResult<InitResponse> {
-    Ok(InitResponse::default())
+    let mut config_store = TypedStoreMut::attach(&mut deps.storage);
+    let config: Config = Config {
+        buttcoin: msg.buttcoin.clone(),
+    };
+    config_store.store(CONFIG_KEY, &config)?;
+
+    Ok(InitResponse {
+        messages: vec![snip20::register_receive_msg(
+            env.contract_code_hash.clone(),
+            None,
+            BLOCK_SIZE,
+            config.buttcoin.contract_hash,
+            config.buttcoin.address,
+        )?],
+        log: vec![],
+    })
 }
 
 pub fn handle<S: Storage, A: Api, Q: Querier>(
@@ -109,8 +128,9 @@ fn try_store<S: Storage, A: Api, Q: Querier>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::from_binary;
+    use crate::state::SecretContract;
     use cosmwasm_std::testing::*;
+    use cosmwasm_std::{from_binary, HumanAddr};
 
     //=== HELPER FUNCTIONS ===
 
@@ -163,8 +183,24 @@ mod tests {
         Extern<MockStorage, MockApi, MockQuerier>,
     ) {
         let mut deps = mock_dependencies(20, &[]);
-        let env = mock_env("admin", &[]);
-        (init(&mut deps, env), deps)
+        let env = mock_env(mock_user_address(), &[]);
+
+        let init_msg = InitMsg {
+            buttcoin: mock_buttcoin(),
+        };
+
+        (init(&mut deps, env, init_msg), deps)
+    }
+
+    fn mock_buttcoin() -> SecretContract {
+        SecretContract {
+            address: HumanAddr("buttcoin-address".to_string()),
+            contract_hash: "buttcoin-contract-hash".to_string(),
+        }
+    }
+
+    fn mock_user_address() -> HumanAddr {
+        HumanAddr::from("some-geezer")
     }
 
     // === HANDLE TESTS===
