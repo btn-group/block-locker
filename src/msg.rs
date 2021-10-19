@@ -1,4 +1,5 @@
-use crate::state::SecretContract;
+use crate::state::{SecretContract, UserLocker};
+use cosmwasm_std::{Binary, HumanAddr, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -7,36 +8,42 @@ pub struct InitMsg {
     pub buttcoin: SecretContract,
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum HandleAnswer {
-    Retrieve {
-        content: String,
-        message: String,
-        status: ResponseStatus,
+pub enum HandleMsg {
+    Receive {
+        sender: HumanAddr,
+        from: HumanAddr,
+        amount: Uint128,
+        msg: Binary,
     },
-    Store {
-        message: String,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum DepositButtcoinAnswer {
+    CreateOrUpdateLocker {
         status: ResponseStatus,
+        user_locker: UserLocker,
+    },
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum DepositButtcoinMsg {
+    CreateOrUpdateLocker {
+        content: Option<String>,
+        whitelisted_addresses: Option<Vec<HumanAddr>>,
     },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum HandleMsg {
-    Retrieve {
-        locker_name: String,
-        password: String,
-    },
-    Store {
-        content: String,
-        locker_name: String,
-        password: String,
-    },
+pub enum ReceiveMsg {
+    DepositButtcoin { hook: Binary },
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum ResponseStatus {
-    Failure,
     Success,
 }
