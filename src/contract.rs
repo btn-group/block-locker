@@ -96,8 +96,9 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
     }
     user_locker_store.store(from.0.as_bytes(), &user_locker)?;
     let amount_to_send_to_user: u128 =
-        amount_of_buttcoin_to_send_to_user(config.buttcoin_balance.u128() + 1);
-    config.buttcoin_balance = Uint128(config.buttcoin_balance.u128() + 1 - amount_to_send_to_user);
+        amount_of_buttcoin_to_send_to_user(config.buttcoin_balance.u128() + AMOUNT_FOR_TRANSACTION);
+    config.buttcoin_balance =
+        Uint128(config.buttcoin_balance.u128() + AMOUNT_FOR_TRANSACTION - amount_to_send_to_user);
     TypedStoreMut::attach(&mut deps.storage)
         .store(CONFIG_KEY, &config)
         .unwrap();
@@ -178,8 +179,9 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
 
     // Send amount to user
     let amount_to_send_to_user: u128 =
-        amount_of_buttcoin_to_send_to_user(config.buttcoin_balance.u128() + 1);
-    config.buttcoin_balance = Uint128(config.buttcoin_balance.u128() + 1 - amount_to_send_to_user);
+        amount_of_buttcoin_to_send_to_user(config.buttcoin_balance.u128() + AMOUNT_FOR_TRANSACTION);
+    config.buttcoin_balance =
+        Uint128(config.buttcoin_balance.u128() + AMOUNT_FOR_TRANSACTION - amount_to_send_to_user);
     TypedStoreMut::attach(&mut deps.storage)
         .store(CONFIG_KEY, &config)
         .unwrap();
@@ -334,7 +336,7 @@ mod tests {
         let config: Config = TypedStoreMut::attach(&mut deps.storage)
             .load(CONFIG_KEY)
             .unwrap();
-        assert_eq!(config.buttcoin_balance, Uint128(1));
+        assert_eq!(config.buttcoin_balance, Uint128(AMOUNT_FOR_TRANSACTION));
 
         // == * it sends a transer message to the user for BUTT
         let handle_result_unwrapped = handle_result.unwrap();
@@ -572,7 +574,7 @@ mod tests {
         let config: Config = TypedStoreMut::attach(&mut deps.storage)
             .load(CONFIG_KEY)
             .unwrap();
-        assert_eq!(config.buttcoin_balance, Uint128(2));
+        assert_eq!(config.buttcoin_balance, Uint128(2 * AMOUNT_FOR_TRANSACTION));
 
         // === * it sends a transer message to the user for BUTT
         assert_eq!(
@@ -625,7 +627,7 @@ mod tests {
         let config: Config = TypedStoreMut::attach(&mut deps.storage)
             .load(CONFIG_KEY)
             .unwrap();
-        assert_eq!(config.buttcoin_balance, Uint128(3));
+        assert_eq!(config.buttcoin_balance, Uint128(3 * AMOUNT_FOR_TRANSACTION));
 
         // === * it sends a transer message to the user for BUTT
         assert_eq!(
@@ -678,7 +680,7 @@ mod tests {
         let config: Config = TypedStoreMut::attach(&mut deps.storage)
             .load(CONFIG_KEY)
             .unwrap();
-        assert_eq!(config.buttcoin_balance, Uint128(4));
+        assert_eq!(config.buttcoin_balance, Uint128(4 * AMOUNT_FOR_TRANSACTION));
 
         // === * it sends a transer message to the user for BUTT
         assert_eq!(
@@ -731,7 +733,7 @@ mod tests {
         let config: Config = TypedStoreMut::attach(&mut deps.storage)
             .load(CONFIG_KEY)
             .unwrap();
-        assert_eq!(config.buttcoin_balance, Uint128(5));
+        assert_eq!(config.buttcoin_balance, Uint128(5 * AMOUNT_FOR_TRANSACTION));
 
         // === * it sends a transer message to the user for BUTT
         assert_eq!(
