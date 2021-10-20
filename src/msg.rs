@@ -37,10 +37,10 @@ pub enum ReceiveAnswer {
 pub enum ReceiveMsg {
     CreateOrUpdateLocker {
         content: Option<String>,
-        whitelisted_addresses: Option<Vec<HumanAddr>>,
+        whitelisted_addresses: Option<Vec<String>>,
     },
     GetUserLocker {
-        address: HumanAddr,
+        address: String,
     },
 }
 
@@ -58,7 +58,7 @@ pub enum ResponseStatus {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct UserLockerResponse {
     pub content: String,
-    pub whitelisted_addresses: Option<Vec<HumanAddr>>,
+    pub whitelisted_addresses: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]

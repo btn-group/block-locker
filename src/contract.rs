@@ -80,7 +80,7 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
     from: HumanAddr,
     config: Config,
     content: Option<String>,
-    whitelisted_addresses: Option<Vec<HumanAddr>>,
+    whitelisted_addresses: Option<Vec<String>>,
 ) -> StdResult<HandleResponse> {
     // Find or initialize User locker
     let mut user_locker_store = TypedStoreMut::<UserLocker, S>::attach(&mut deps.storage);
@@ -141,8 +141,9 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     from: HumanAddr,
     config: Config,
-    address: HumanAddr,
+    address: String,
 ) -> StdResult<HandleResponse> {
+    let address = HumanAddr::from(address);
     // Find or initialize User locker
     let user_locker_store = TypedStore::<UserLocker, S>::attach(&deps.storage);
     let user_locker = user_locker_store
@@ -156,10 +157,13 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
         whitelisted_addresses: Some(user_locker.whitelisted_addresses.clone()),
     };
     if from != address {
-        user_locker_response.whitelisted_addresses = None;
-        if !user_locker.whitelisted_addresses.contains(&from) {
+        if !user_locker
+            .whitelisted_addresses
+            .contains(&from.as_str().to_string())
+        {
             user_locker_response.content = "".to_string();
         }
+        user_locker_response.whitelisted_addresses = None;
     };
 
     Ok(HandleResponse {
@@ -200,13 +204,14 @@ fn receive<S: Storage, A: Api, Q: Querier>(
     }
 
     let msg: ReceiveMsg = from_binary(&msg)?;
-    match msg {
+    let response = match msg {
         ReceiveMsg::CreateOrUpdateLocker {
             content,
             whitelisted_addresses,
         } => create_or_update_locker(deps, from, config, content, whitelisted_addresses),
         ReceiveMsg::GetUserLocker { address } => get_user_locker(deps, from, config, address),
-    }
+    };
+    response
 }
 
 #[cfg(test)]
@@ -247,7 +252,7 @@ mod tests {
     #[test]
     fn test_handle_create_or_update_locker() {
         let content: String = "mnemonic".to_string();
-        let whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret12345678910")];
+        let whitelisted_addresses: Vec<String> = vec!["secret12345678910".to_string()];
         let wrong_amount: Uint128 = Uint128(AMOUNT_FOR_TRANSACTION - 1);
         // Initialize
         let (init_result, mut deps) = init_helper();
@@ -320,7 +325,7 @@ mod tests {
         //     .load(from.0.as_bytes())
         //     .unwrap();
         // assert_eq!(user_locker.content, content)
-        // assert_eq!(user_locker.whitelisted_addresses, vec![HumanAddr::from("secret12345678910")])
+        // assert_eq!(user_locker.whitelisteStringes, vec!["secret12345678910"])
 
         // == * it increases the balance of BUTT in config by 1
         let config: Config = TypedStoreMut::attach(&mut deps.storage)
@@ -392,7 +397,7 @@ mod tests {
         );
 
         // when the user sends a request to change the white listed addresses only
-        let new_whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret5")];
+        let new_whitelisted_addresses: Vec<String> = vec!["secret5".to_string()];
         let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
             content: None,
             whitelisted_addresses: Some(new_whitelisted_addresses.clone()),
@@ -425,7 +430,7 @@ mod tests {
         );
         // when the user sends in a request to change both the text and the white listed addresses
         let newer_text: String = "Superconducting.".to_string();
-        let newer_whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret5")];
+        let newer_whitelisted_addresses: Vec<String> = vec!["secret5".to_string()];
         let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
             content: Some(newer_text.clone()),
             whitelisted_addresses: Some(newer_whitelisted_addresses.clone()),
@@ -459,11 +464,11 @@ mod tests {
 
         // when the user sends in more than 3 addresses
         let newer_text: String = "Superconducting.".to_string();
-        let newer_whitelisted_addresses: Vec<HumanAddr> = vec![
-            HumanAddr::from("secret5"),
-            HumanAddr::from("secret2"),
-            HumanAddr::from("secret3"),
-            HumanAddr::from("secret1"),
+        let newer_whitelisted_addresses: Vec<String> = vec![
+            "secret5".to_string(),
+            "secret2".to_string(),
+            "secret3".to_string(),
+            "secret1".to_string(),
         ];
         let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
             content: Some(newer_text.clone()),
@@ -490,7 +495,7 @@ mod tests {
     #[test]
     fn test_handle_get_user_locker() {
         let content: String = "mnemonic".to_string();
-        let whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret12345678910")];
+        let whitelisted_addresses: Vec<String> = vec!["secret12345678910".to_string()];
         let wrong_amount: Uint128 = Uint128(AMOUNT_FOR_TRANSACTION - 1);
         // Initialize
         let (init_result, mut deps) = init_helper();
@@ -560,7 +565,7 @@ mod tests {
 
         // === when a user without access to the locker requests the locker
         let get_user_locker_msg = ReceiveMsg::GetUserLocker {
-            address: mock_user_address(),
+            address: mock_user_address().to_string(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: HumanAddr::from("letsgobrandon"),
@@ -610,11 +615,11 @@ mod tests {
 
         // === when a user with access to the locker requests the locker but is not the owner
         let get_user_locker_msg = ReceiveMsg::GetUserLocker {
-            address: mock_user_address(),
+            address: mock_user_address().to_string(),
         };
         let receive_msg = HandleMsg::Receive {
-            sender: whitelisted_addresses[0].clone(),
-            from: whitelisted_addresses[0].clone(),
+            sender: HumanAddr::from(whitelisted_addresses[0].clone()),
+            from: HumanAddr::from(whitelisted_addresses[0].clone()),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
             msg: to_binary(&get_user_locker_msg).unwrap(),
         };
@@ -634,7 +639,7 @@ mod tests {
         assert_eq!(
             handle_result_unwrapped.messages,
             vec![snip20::transfer_msg(
-                whitelisted_addresses[0].clone(),
+                HumanAddr::from(whitelisted_addresses[0].clone()),
                 Uint128(0),
                 None,
                 BLOCK_SIZE,
@@ -660,7 +665,7 @@ mod tests {
 
         // === when the owner accesses their locker
         let get_user_locker_msg = ReceiveMsg::GetUserLocker {
-            address: mock_user_address(),
+            address: mock_user_address().to_string(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: mock_user_address(),
@@ -710,7 +715,7 @@ mod tests {
 
         // === when a user tries to access a locker that does not exist
         let get_user_locker_msg = ReceiveMsg::GetUserLocker {
-            address: HumanAddr::from("thislockerdoesnotexist"),
+            address: "thislockerdoesnotexist".to_string(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: mock_user_address(),

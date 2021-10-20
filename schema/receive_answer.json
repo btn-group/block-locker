@@ -50,9 +50,6 @@
     }
   ],
   "definitions": {
-    "HumanAddr": {
-      "type": "string"
-    },
     "ResponseStatus": {
       "type": "string",
       "enum": [
@@ -72,7 +69,7 @@
         "whitelisted_addresses": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/HumanAddr"
+            "type": "string"
           }
         }
       }
@@ -92,7 +89,7 @@
             "null"
           ],
           "items": {
-            "$ref": "#/definitions/HumanAddr"
+            "type": "string"
           }
         }
       }

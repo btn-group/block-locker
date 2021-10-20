@@ -23,7 +23,7 @@
                 "null"
               ],
               "items": {
-                "$ref": "#/definitions/HumanAddr"
+                "type": "string"
               }
             }
           }
@@ -43,16 +43,11 @@
           ],
           "properties": {
             "address": {
-              "$ref": "#/definitions/HumanAddr"
+              "type": "string"
             }
           }
         }
       }
     }
-  ],
-  "definitions": {
-    "HumanAddr": {
-      "type": "string"
-    }
-  }
+  ]
 }

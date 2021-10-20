@@ -14,8 +14,8 @@ pub struct Config {
     pub buttcoin_balance: Uint128,
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct UserLocker {
-    pub whitelisted_addresses: Vec<HumanAddr>,
+    pub whitelisted_addresses: Vec<String>,
     pub content: String,
 }
