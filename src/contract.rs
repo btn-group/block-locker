@@ -1,6 +1,8 @@
 use crate::authorize::authorize;
 use crate::msg::ResponseStatus::Success;
-use crate::msg::{HandleMsg, InitMsg, QueryMsg, ReceiveAnswer, ReceiveMsg, UserLockerResponse};
+use crate::msg::{
+    HandleMsg, InitMsg, QueryAnswer, QueryMsg, ReceiveAnswer, ReceiveMsg, UserLockerResponse,
+};
 use crate::state::{Config, UserLocker};
 use cosmwasm_std::{
     from_binary, to_binary, Api, Binary, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
@@ -54,11 +56,10 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     pad_handle_result(response, BLOCK_SIZE)
 }
 
-pub fn query<S: Storage, A: Api, Q: Querier>(
-    _deps: &Extern<S, A, Q>,
-    _msg: QueryMsg,
-) -> QueryResult {
-    to_binary("There's no query functions but doesn't seem to work on chain unless this is here.")
+pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryMsg) -> QueryResult {
+    match msg {
+        QueryMsg::Config {} => query_config(deps),
+    }
 }
 
 // So what's this really for then? I guess this is really for a return for the user to get some of their BUTT back and this is for people setting and getting...
@@ -168,6 +169,14 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
             status: Success,
             user_locker_response: user_locker_response,
         })?),
+    })
+}
+
+fn query_config<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> QueryResult {
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
+
+    to_binary(&QueryAnswer::Config {
+        buttcoin: config.buttcoin,
     })
 }
 
@@ -748,5 +757,20 @@ mod tests {
             })
             .unwrap()
         );
+    }
+
+    // === QUERY TESTS ===
+
+    #[test]
+    fn test_query_config() {
+        let (_init_result, deps) = init_helper();
+        let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY).unwrap();
+        let query_result = query(&deps, QueryMsg::Config {}).unwrap();
+        let query_answer: QueryAnswer = from_binary(&query_result).unwrap();
+        match query_answer {
+            QueryAnswer::Config { buttcoin } => {
+                assert_eq!(buttcoin, config.buttcoin);
+            }
+        }
     }
 }

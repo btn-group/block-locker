@@ -46,7 +46,9 @@ pub enum ReceiveMsg {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum QueryMsg {}
+pub enum QueryMsg {
+    Config {},
+}
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum ResponseStatus {
@@ -57,4 +59,10 @@ pub enum ResponseStatus {
 pub struct UserLockerResponse {
     pub content: String,
     pub whitelisted_addresses: Option<Vec<HumanAddr>>,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryAnswer {
+    Config { buttcoin: SecretContract },
 }
