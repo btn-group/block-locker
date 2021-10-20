@@ -447,6 +447,35 @@ mod tests {
             })
             .unwrap()
         );
+
+        // when the user sends in more than 3 addresses
+        let newer_text: String = "Superconducting.".to_string();
+        let newer_whitelisted_addresses: Vec<HumanAddr> = vec![
+            HumanAddr::from("secret5"),
+            HumanAddr::from("secret2"),
+            HumanAddr::from("secret3"),
+            HumanAddr::from("secret1"),
+        ];
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
+            content: Some(newer_text.clone()),
+            whitelisted_addresses: Some(newer_whitelisted_addresses.clone()),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        // = * It raises an error
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::generic_err(format!("Maximum of 3 whitelisted_addresses."))
+        );
     }
 
     #[test]
