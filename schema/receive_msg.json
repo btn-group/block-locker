@@ -5,17 +5,45 @@
     {
       "type": "object",
       "required": [
-        "deposit_buttcoin"
+        "create_or_update_locker"
       ],
       "properties": {
-        "deposit_buttcoin": {
+        "create_or_update_locker": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "whitelisted_addresses": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "get_user_locker"
+      ],
+      "properties": {
+        "get_user_locker": {
           "type": "object",
           "required": [
-            "hook"
+            "address"
           ],
           "properties": {
-            "hook": {
-              "$ref": "#/definitions/Binary"
+            "address": {
+              "$ref": "#/definitions/HumanAddr"
             }
           }
         }
@@ -23,8 +51,7 @@
     }
   ],
   "definitions": {
-    "Binary": {
-      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
+    "HumanAddr": {
       "type": "string"
     }
   }

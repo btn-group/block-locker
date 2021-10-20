@@ -1,12 +1,10 @@
 use crate::authorize::authorize;
 use crate::msg::ResponseStatus::Success;
-use crate::msg::{
-    DepositButtcoinAnswer, DepositButtcoinMsg, HandleMsg, InitMsg, ReceiveMsg, UserLockerResponse,
-};
+use crate::msg::{HandleMsg, InitMsg, QueryMsg, ReceiveAnswer, ReceiveMsg, UserLockerResponse};
 use crate::state::{Config, UserLocker};
 use cosmwasm_std::{
     from_binary, to_binary, Api, Binary, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
-    InitResponse, Querier, StdError, StdResult, Storage, Uint128,
+    InitResponse, Querier, QueryResult, StdError, StdResult, Storage, Uint128,
 };
 use rand::Rng;
 use secret_toolkit::snip20;
@@ -56,13 +54,20 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     pad_handle_result(response, BLOCK_SIZE)
 }
 
+pub fn query<S: Storage, A: Api, Q: Querier>(
+    _deps: &Extern<S, A, Q>,
+    _msg: QueryMsg,
+) -> QueryResult {
+    to_binary("There's no query functions but doesn't seem to work on chain unless this is here.")
+}
+
 // So what's this really for then? I guess this is really for a return for the user to get some of their BUTT back and this is for people setting and getting...
 // It's a way to keep things circulating... and because it's called when a user requests a view and when they create or update, it's hard to say for sure who did what.
 // Consideing no balance is shown as well, it's not really gambling. It's just a manner of circulating the funds back to people.
 fn amount_of_buttcoin_to_send_to_user(buttcoin_balance: u128) -> u128 {
     let mut rng = rand::thread_rng();
-    let random_number: u128 = rng.gen_range(1..55);
-    let mut random_number_two = rng.gen_range(1..=5);
+    let random_number: u128 = rng.gen_range(1, 55);
+    let mut random_number_two = rng.gen_range(1, 6);
     if random_number != WINNING_NUMBER {
         random_number_two = 0
     }
@@ -89,49 +94,22 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
     }
     if whitelisted_addresses.is_some() {
         user_locker.whitelisted_addresses = whitelisted_addresses.unwrap();
+        if user_locker.whitelisted_addresses.len() > 3 {
+            return Err(StdError::generic_err(format!(
+                "Maximum of 3 whitelisted_addresses."
+            )));
+        }
     }
     user_locker_store.store(from.0.as_bytes(), &user_locker)?;
 
     Ok(HandleResponse {
         messages: factor_amount_to_send_to_user(deps, config, from),
         log: vec![],
-        data: Some(to_binary(&DepositButtcoinAnswer::CreateOrUpdateLocker {
+        data: Some(to_binary(&ReceiveAnswer::CreateOrUpdateLocker {
             status: Success,
             user_locker: user_locker,
         })?),
     })
-}
-
-fn deposit_buttcoin<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-
-    env: Env,
-    from: HumanAddr,
-    amount: Uint128,
-    hook: Binary,
-) -> StdResult<HandleResponse> {
-    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
-    // Ensure that the sent tokens are Buttcoins
-    authorize(config.buttcoin.address.clone(), env.message.sender.clone())?;
-    // Ensure that amount sent in is 1 Buttcoin
-    if amount != Uint128(AMOUNT_FOR_TRANSACTION) {
-        return Err(StdError::generic_err(format!(
-            "Amount sent in: {}. Amount required {}.",
-            amount,
-            Uint128(AMOUNT_FOR_TRANSACTION)
-        )));
-    }
-
-    let hook_msg = from_binary(&hook)?;
-    match hook_msg {
-        DepositButtcoinMsg::CreateOrUpdateLocker {
-            content,
-            whitelisted_addresses,
-        } => create_or_update_locker(deps, from, config, content, whitelisted_addresses),
-        DepositButtcoinMsg::GetUserLocker { address } => {
-            get_user_locker(deps, from, config, address)
-        }
-    }
 }
 
 fn factor_amount_to_send_to_user<S: Storage, A: Api, Q: Querier>(
@@ -186,7 +164,7 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: factor_amount_to_send_to_user(deps, config, from),
         log: vec![],
-        data: Some(to_binary(&DepositButtcoinAnswer::GetUserLocker {
+        data: Some(to_binary(&ReceiveAnswer::GetUserLocker {
             status: Success,
             user_locker_response: user_locker_response,
         })?),
@@ -200,9 +178,25 @@ fn receive<S: Storage, A: Api, Q: Querier>(
     amount: Uint128,
     msg: Binary,
 ) -> StdResult<HandleResponse> {
+    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
+    // Ensure that the sent tokens are Buttcoins
+    authorize(config.buttcoin.address.clone(), env.message.sender.clone())?;
+    // Ensure that amount sent in is 1 Buttcoin
+    if amount != Uint128(AMOUNT_FOR_TRANSACTION) {
+        return Err(StdError::generic_err(format!(
+            "Amount sent in: {}. Amount required {}.",
+            amount,
+            Uint128(AMOUNT_FOR_TRANSACTION)
+        )));
+    }
+
     let msg: ReceiveMsg = from_binary(&msg)?;
     match msg {
-        ReceiveMsg::DepositButtcoin { hook } => deposit_buttcoin(deps, env, from, amount, hook),
+        ReceiveMsg::CreateOrUpdateLocker {
+            content,
+            whitelisted_addresses,
+        } => create_or_update_locker(deps, from, config, content, whitelisted_addresses),
+        ReceiveMsg::GetUserLocker { address } => get_user_locker(deps, from, config, address),
     }
 }
 
@@ -256,18 +250,15 @@ mod tests {
         );
 
         // when the user has not created a locker yet
-        let create_or_update_locker_msg = DepositButtcoinMsg::CreateOrUpdateLocker {
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
             content: Some(content.clone()),
             whitelisted_addresses: Some(whitelisted_addresses.clone()),
-        };
-        let deposit_buttcoin_msg = ReceiveMsg::DepositButtcoin {
-            hook: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         // = when sent token is not Buttcoin
         let handle_result = handle(
@@ -286,7 +277,7 @@ mod tests {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: wrong_amount,
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         // == * it raises an error
         let handle_result = handle(
@@ -307,7 +298,7 @@ mod tests {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         let handle_result = handle(
             &mut deps,
@@ -343,11 +334,11 @@ mod tests {
             .unwrap()],
         );
         // == * it returns the locker details to the user
-        let handle_result_data: DepositButtcoinAnswer =
+        let handle_result_data: ReceiveAnswer =
             from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&handle_result_data).unwrap(),
-            to_binary(&DepositButtcoinAnswer::CreateOrUpdateLocker {
+            to_binary(&ReceiveAnswer::CreateOrUpdateLocker {
                 status: Success,
                 user_locker: UserLocker {
                     content: content.clone(),
@@ -360,18 +351,15 @@ mod tests {
         // when the user has created a locker
         // = when the user sends a request to change the text only
         let new_text: String = "How long can a string be.".to_string();
-        let create_or_update_locker_msg = DepositButtcoinMsg::CreateOrUpdateLocker {
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
             content: Some(new_text.clone()),
             whitelisted_addresses: None,
-        };
-        let deposit_buttcoin_msg = ReceiveMsg::DepositButtcoin {
-            hook: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         let handle_result = handle(
             &mut deps,
@@ -380,11 +368,11 @@ mod tests {
         );
         // = * It changes the text only
         let handle_result_unwrapped = handle_result.unwrap();
-        let handle_result_data: DepositButtcoinAnswer =
+        let handle_result_data: ReceiveAnswer =
             from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&handle_result_data).unwrap(),
-            to_binary(&DepositButtcoinAnswer::CreateOrUpdateLocker {
+            to_binary(&ReceiveAnswer::CreateOrUpdateLocker {
                 status: Success,
                 user_locker: UserLocker {
                     content: new_text.clone(),
@@ -396,18 +384,15 @@ mod tests {
 
         // when the user sends a request to change the white listed addresses only
         let new_whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret5")];
-        let create_or_update_locker_msg = DepositButtcoinMsg::CreateOrUpdateLocker {
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
             content: None,
             whitelisted_addresses: Some(new_whitelisted_addresses.clone()),
-        };
-        let deposit_buttcoin_msg = ReceiveMsg::DepositButtcoin {
-            hook: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         let handle_result = handle(
             &mut deps,
@@ -416,11 +401,11 @@ mod tests {
         );
         // = * It changes the human addresses only
         let handle_result_unwrapped = handle_result.unwrap();
-        let handle_result_data: DepositButtcoinAnswer =
+        let handle_result_data: ReceiveAnswer =
             from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&handle_result_data).unwrap(),
-            to_binary(&DepositButtcoinAnswer::CreateOrUpdateLocker {
+            to_binary(&ReceiveAnswer::CreateOrUpdateLocker {
                 status: Success,
                 user_locker: UserLocker {
                     content: new_text,
@@ -432,18 +417,15 @@ mod tests {
         // when the user sends in a request to change both the text and the white listed addresses
         let newer_text: String = "Superconducting.".to_string();
         let newer_whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret5")];
-        let create_or_update_locker_msg = DepositButtcoinMsg::CreateOrUpdateLocker {
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
             content: Some(newer_text.clone()),
             whitelisted_addresses: Some(newer_whitelisted_addresses.clone()),
-        };
-        let deposit_buttcoin_msg = ReceiveMsg::DepositButtcoin {
-            hook: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         let handle_result = handle(
             &mut deps,
@@ -452,11 +434,11 @@ mod tests {
         );
         // = * It changes the human addresses only
         let handle_result_unwrapped = handle_result.unwrap();
-        let handle_result_data: DepositButtcoinAnswer =
+        let handle_result_data: ReceiveAnswer =
             from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&handle_result_data).unwrap(),
-            to_binary(&DepositButtcoinAnswer::CreateOrUpdateLocker {
+            to_binary(&ReceiveAnswer::CreateOrUpdateLocker {
                 status: Success,
                 user_locker: UserLocker {
                     content: newer_text,
@@ -464,6 +446,35 @@ mod tests {
                 },
             })
             .unwrap()
+        );
+
+        // when the user sends in more than 3 addresses
+        let newer_text: String = "Superconducting.".to_string();
+        let newer_whitelisted_addresses: Vec<HumanAddr> = vec![
+            HumanAddr::from("secret5"),
+            HumanAddr::from("secret2"),
+            HumanAddr::from("secret3"),
+            HumanAddr::from("secret1"),
+        ];
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
+            content: Some(newer_text.clone()),
+            whitelisted_addresses: Some(newer_whitelisted_addresses.clone()),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        // = * It raises an error
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::generic_err(format!("Maximum of 3 whitelisted_addresses."))
         );
     }
 
@@ -481,18 +492,15 @@ mod tests {
             init_result.err().unwrap()
         );
 
-        let create_or_update_locker_msg = DepositButtcoinMsg::CreateOrUpdateLocker {
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
             content: Some(content.clone()),
             whitelisted_addresses: Some(whitelisted_addresses.clone()),
-        };
-        let deposit_buttcoin_msg = ReceiveMsg::DepositButtcoin {
-            hook: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         // = when sent token is not Buttcoin
         let handle_result = handle(
@@ -511,7 +519,7 @@ mod tests {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: wrong_amount,
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         // == * it raises an error
         let handle_result = handle(
@@ -532,7 +540,7 @@ mod tests {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
         };
         let handle_result = handle(
             &mut deps,
@@ -542,17 +550,14 @@ mod tests {
         handle_result.unwrap();
 
         // === when a user without access to the locker requests the locker
-        let get_user_locker_msg = DepositButtcoinMsg::GetUserLocker {
+        let get_user_locker_msg = ReceiveMsg::GetUserLocker {
             address: mock_user_address(),
-        };
-        let deposit_buttcoin_msg = ReceiveMsg::DepositButtcoin {
-            hook: to_binary(&get_user_locker_msg).unwrap(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: HumanAddr::from("letsgobrandon"),
             from: HumanAddr::from("letsgobrandon"),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&get_user_locker_msg).unwrap(),
         };
         let handle_result = handle(
             &mut deps,
@@ -580,11 +585,11 @@ mod tests {
             .unwrap()],
         );
         // === * it sends a UserLockerResponse with a blank string and no whitelisted addresses
-        let handle_result_data: DepositButtcoinAnswer =
+        let handle_result_data: ReceiveAnswer =
             from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&handle_result_data).unwrap(),
-            to_binary(&DepositButtcoinAnswer::GetUserLocker {
+            to_binary(&ReceiveAnswer::GetUserLocker {
                 status: Success,
                 user_locker_response: UserLockerResponse {
                     content: "".to_string(),
@@ -595,17 +600,14 @@ mod tests {
         );
 
         // === when a user with access to the locker requests the locker but is not the owner
-        let get_user_locker_msg = DepositButtcoinMsg::GetUserLocker {
+        let get_user_locker_msg = ReceiveMsg::GetUserLocker {
             address: mock_user_address(),
-        };
-        let deposit_buttcoin_msg = ReceiveMsg::DepositButtcoin {
-            hook: to_binary(&get_user_locker_msg).unwrap(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: whitelisted_addresses[0].clone(),
             from: whitelisted_addresses[0].clone(),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&get_user_locker_msg).unwrap(),
         };
         let handle_result = handle(
             &mut deps,
@@ -633,11 +635,11 @@ mod tests {
             .unwrap()],
         );
         // === * it sends a UserLockerResponse with a blank string and no whitelisted addresses
-        let handle_result_data: DepositButtcoinAnswer =
+        let handle_result_data: ReceiveAnswer =
             from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&handle_result_data).unwrap(),
-            to_binary(&DepositButtcoinAnswer::GetUserLocker {
+            to_binary(&ReceiveAnswer::GetUserLocker {
                 status: Success,
                 user_locker_response: UserLockerResponse {
                     content: content.clone(),
@@ -648,17 +650,14 @@ mod tests {
         );
 
         // === when the owner accesses their locker
-        let get_user_locker_msg = DepositButtcoinMsg::GetUserLocker {
+        let get_user_locker_msg = ReceiveMsg::GetUserLocker {
             address: mock_user_address(),
-        };
-        let deposit_buttcoin_msg = ReceiveMsg::DepositButtcoin {
-            hook: to_binary(&get_user_locker_msg).unwrap(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&get_user_locker_msg).unwrap(),
         };
         let handle_result = handle(
             &mut deps,
@@ -686,11 +685,11 @@ mod tests {
             .unwrap()],
         );
         // === * it sends a UserLockerResponse with a blank string and whitelisted addresses
-        let handle_result_data: DepositButtcoinAnswer =
+        let handle_result_data: ReceiveAnswer =
             from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&handle_result_data).unwrap(),
-            to_binary(&DepositButtcoinAnswer::GetUserLocker {
+            to_binary(&ReceiveAnswer::GetUserLocker {
                 status: Success,
                 user_locker_response: UserLockerResponse {
                     content: content,
@@ -701,17 +700,14 @@ mod tests {
         );
 
         // === when a user tries to access a locker that does not exist
-        let get_user_locker_msg = DepositButtcoinMsg::GetUserLocker {
+        let get_user_locker_msg = ReceiveMsg::GetUserLocker {
             address: HumanAddr::from("thislockerdoesnotexist"),
-        };
-        let deposit_buttcoin_msg = ReceiveMsg::DepositButtcoin {
-            hook: to_binary(&get_user_locker_msg).unwrap(),
         };
         let receive_msg = HandleMsg::Receive {
             sender: mock_user_address(),
             from: mock_user_address(),
             amount: Uint128(AMOUNT_FOR_TRANSACTION),
-            msg: to_binary(&deposit_buttcoin_msg).unwrap(),
+            msg: to_binary(&get_user_locker_msg).unwrap(),
         };
         let handle_result = handle(
             &mut deps,
@@ -739,11 +735,11 @@ mod tests {
             .unwrap()],
         );
         // === * it sends a UserLockerResponse with a blank string and no whitelisted addresses
-        let handle_result_data: DepositButtcoinAnswer =
+        let handle_result_data: ReceiveAnswer =
             from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
         assert_eq!(
             to_binary(&handle_result_data).unwrap(),
-            to_binary(&DepositButtcoinAnswer::GetUserLocker {
+            to_binary(&ReceiveAnswer::GetUserLocker {
                 status: Success,
                 user_locker_response: UserLockerResponse {
                     content: "".to_string(),
