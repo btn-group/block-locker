@@ -5,8 +5,8 @@ use crate::msg::{
 };
 use crate::state::{Config, UserLocker};
 use cosmwasm_std::{
-    from_binary, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse,
-    Querier, StdError, StdResult, Storage, Uint128,
+    from_binary, to_binary, Api, Binary, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
+    InitResponse, Querier, StdError, StdResult, Storage, Uint128,
 };
 use rand::Rng;
 use secret_toolkit::snip20;
@@ -17,7 +17,7 @@ use secret_toolkit::utils::pad_handle_result;
 pub const AMOUNT_FOR_TRANSACTION: u128 = 1_000_000;
 pub const BLOCK_SIZE: usize = 256;
 pub const CONFIG_KEY: &[u8] = b"config";
-pub const WINNING_NUMBER: u128 = 55;
+pub const WINNING_NUMBER: u128 = 5;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -56,27 +56,23 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     pad_handle_result(response, BLOCK_SIZE)
 }
 
+// So what's this really for then? I guess this is really for a return for the user to get some of their BUTT back and this is for people setting and getting...
+// It's a way to keep things circulating... and because it's called when a user requests a view and when they create or update, it's hard to say for sure who did what.
+// Consideing no balance is shown as well, it's not really gambling. It's just a manner of circulating the funds back to people.
 fn amount_of_buttcoin_to_send_to_user(buttcoin_balance: u128) -> u128 {
-    let minumum_applicable_balance: u128 = 5;
-    let amount: u128 = if buttcoin_balance < minumum_applicable_balance {
-        0
-    } else {
-        let mut rng = rand::thread_rng();
-        let random_number: u128 = rng.gen_range(1..=WINNING_NUMBER);
-        if random_number == WINNING_NUMBER {
-            let random_number_two = rng.gen_range(1..=minumum_applicable_balance);
-            buttcoin_balance * random_number_two / minumum_applicable_balance
-        } else {
-            0
-        }
-    };
-    amount
+    let mut rng = rand::thread_rng();
+    let random_number: u128 = rng.gen_range(1..55);
+    let mut random_number_two = rng.gen_range(1..=5);
+    if random_number != WINNING_NUMBER {
+        random_number_two = 0
+    }
+    buttcoin_balance * random_number_two / 5
 }
 
 fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     from: HumanAddr,
-    mut config: Config,
+    config: Config,
     content: Option<String>,
     whitelisted_addresses: Option<Vec<HumanAddr>>,
 ) -> StdResult<HandleResponse> {
@@ -95,23 +91,9 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
         user_locker.whitelisted_addresses = whitelisted_addresses.unwrap();
     }
     user_locker_store.store(from.0.as_bytes(), &user_locker)?;
-    let amount_to_send_to_user: u128 =
-        amount_of_buttcoin_to_send_to_user(config.buttcoin_balance.u128() + AMOUNT_FOR_TRANSACTION);
-    config.buttcoin_balance =
-        Uint128(config.buttcoin_balance.u128() + AMOUNT_FOR_TRANSACTION - amount_to_send_to_user);
-    TypedStoreMut::attach(&mut deps.storage)
-        .store(CONFIG_KEY, &config)
-        .unwrap();
 
     Ok(HandleResponse {
-        messages: vec![snip20::transfer_msg(
-            from,
-            Uint128(amount_to_send_to_user),
-            None,
-            BLOCK_SIZE,
-            config.buttcoin.contract_hash,
-            config.buttcoin.address,
-        )?],
+        messages: factor_amount_to_send_to_user(deps, config, from),
         log: vec![],
         data: Some(to_binary(&DepositButtcoinAnswer::CreateOrUpdateLocker {
             status: Success,
@@ -152,10 +134,34 @@ fn deposit_buttcoin<S: Storage, A: Api, Q: Querier>(
     }
 }
 
+fn factor_amount_to_send_to_user<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    mut config: Config,
+    user_address: HumanAddr,
+) -> Vec<CosmosMsg> {
+    // Send amount to user
+    let amount_to_send_to_user: u128 =
+        amount_of_buttcoin_to_send_to_user(config.buttcoin_balance.u128() + AMOUNT_FOR_TRANSACTION);
+    config.buttcoin_balance =
+        Uint128(config.buttcoin_balance.u128() + AMOUNT_FOR_TRANSACTION - amount_to_send_to_user);
+    TypedStoreMut::attach(&mut deps.storage)
+        .store(CONFIG_KEY, &config)
+        .unwrap();
+    vec![snip20::transfer_msg(
+        user_address,
+        Uint128(amount_to_send_to_user),
+        None,
+        BLOCK_SIZE,
+        config.buttcoin.contract_hash,
+        config.buttcoin.address,
+    )
+    .unwrap()]
+}
+
 fn get_user_locker<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     from: HumanAddr,
-    mut config: Config,
+    config: Config,
     address: HumanAddr,
 ) -> StdResult<HandleResponse> {
     // Find or initialize User locker
@@ -177,24 +183,8 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
         }
     };
 
-    // Send amount to user
-    let amount_to_send_to_user: u128 =
-        amount_of_buttcoin_to_send_to_user(config.buttcoin_balance.u128() + AMOUNT_FOR_TRANSACTION);
-    config.buttcoin_balance =
-        Uint128(config.buttcoin_balance.u128() + AMOUNT_FOR_TRANSACTION - amount_to_send_to_user);
-    TypedStoreMut::attach(&mut deps.storage)
-        .store(CONFIG_KEY, &config)
-        .unwrap();
-
     Ok(HandleResponse {
-        messages: vec![snip20::transfer_msg(
-            from,
-            Uint128(amount_to_send_to_user),
-            None,
-            BLOCK_SIZE,
-            config.buttcoin.contract_hash,
-            config.buttcoin.address,
-        )?],
+        messages: factor_amount_to_send_to_user(deps, config, from),
         log: vec![],
         data: Some(to_binary(&DepositButtcoinAnswer::GetUserLocker {
             status: Success,
