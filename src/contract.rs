@@ -3,7 +3,7 @@ use crate::msg::ResponseStatus::Success;
 use crate::msg::{
     DepositButtcoinAnswer, DepositButtcoinMsg, HandleMsg, InitMsg, ReceiveMsg, UserLockerResponse,
 };
-use crate::state::{Config, UserLocker};
+use crate::state::{Config, RequestRecord, UserLocker};
 use cosmwasm_std::{
     from_binary, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse,
     Querier, StdError, StdResult, Storage, Uint128,
@@ -85,8 +85,9 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
     let mut user_locker = user_locker_store
         .load(from.0.as_bytes())
         .unwrap_or(UserLocker {
-            whitelisted_addresses: vec![],
             content: "".to_string(),
+            request_log: vec![],
+            whitelisted_addresses: vec![],
         });
     if content.is_some() {
         user_locker.content = content.unwrap();
@@ -121,7 +122,6 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
 
 fn deposit_buttcoin<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-
     env: Env,
     from: HumanAddr,
     amount: Uint128,
@@ -146,7 +146,7 @@ fn deposit_buttcoin<S: Storage, A: Api, Q: Querier>(
             whitelisted_addresses,
         } => create_or_update_locker(deps, from, config, content, whitelisted_addresses),
         DepositButtcoinMsg::GetUserLocker { address } => {
-            get_user_locker(deps, from, config, address)
+            get_user_locker(deps, from, config, address, env.block.height)
         }
     }
 }
@@ -156,20 +156,31 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
     from: HumanAddr,
     mut config: Config,
     address: HumanAddr,
+    block_height: u64,
 ) -> StdResult<HandleResponse> {
     // Find or initialize User locker
-    let user_locker_store = TypedStore::<UserLocker, S>::attach(&deps.storage);
-    let user_locker = user_locker_store
+    let mut user_locker_store = TypedStoreMut::<UserLocker, S>::attach(&mut deps.storage);
+    let mut user_locker = user_locker_store
         .load(address.0.as_bytes())
         .unwrap_or(UserLocker {
             content: "".to_string(),
+            request_log: vec![],
             whitelisted_addresses: vec![],
         });
+    if from != address {
+        user_locker.request_log.push(RequestRecord {
+            address: from.clone(),
+            block_height: block_height,
+        });
+        user_locker_store.store(address.0.as_bytes(), &user_locker)?;
+    }
     let mut user_locker_response: UserLockerResponse = UserLockerResponse {
         content: user_locker.content,
+        request_log: Some(user_locker.request_log),
         whitelisted_addresses: Some(user_locker.whitelisted_addresses.clone()),
     };
     if from != address {
+        user_locker_response.request_log = None;
         user_locker_response.whitelisted_addresses = None;
         if !user_locker.whitelisted_addresses.contains(&from) {
             user_locker_response.content = "".to_string();
@@ -228,7 +239,6 @@ mod tests {
     ) {
         let mut deps = mock_dependencies(20, &[]);
         let env = mock_env(mock_user_address(), &[]);
-
         let init_msg = InitMsg {
             buttcoin: mock_buttcoin(),
         };
@@ -359,6 +369,7 @@ mod tests {
                 status: Success,
                 user_locker: UserLocker {
                     content: content.clone(),
+                    request_log: vec![],
                     whitelisted_addresses: whitelisted_addresses.clone()
                 },
             })
@@ -396,6 +407,7 @@ mod tests {
                 status: Success,
                 user_locker: UserLocker {
                     content: new_text.clone(),
+                    request_log: vec![],
                     whitelisted_addresses: whitelisted_addresses
                 },
             })
@@ -432,6 +444,7 @@ mod tests {
                 status: Success,
                 user_locker: UserLocker {
                     content: new_text,
+                    request_log: vec![],
                     whitelisted_addresses: new_whitelisted_addresses
                 },
             })
@@ -468,6 +481,7 @@ mod tests {
                 status: Success,
                 user_locker: UserLocker {
                     content: newer_text,
+                    request_log: vec![],
                     whitelisted_addresses: newer_whitelisted_addresses
                 },
             })
@@ -587,7 +601,7 @@ mod tests {
             )
             .unwrap()],
         );
-        // === * it sends a UserLockerResponse with a blank string and no whitelisted addresses
+        // === * it sends a UserLockerResponse with a blank string, no whitelisted addresses and no rest_log
         let handle_result_data: DepositButtcoinAnswer =
             from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
         assert_eq!(
@@ -596,6 +610,7 @@ mod tests {
                 status: Success,
                 user_locker_response: UserLockerResponse {
                     content: "".to_string(),
+                    request_log: None,
                     whitelisted_addresses: None
                 },
             })
@@ -627,7 +642,7 @@ mod tests {
             .unwrap();
         assert_eq!(config.buttcoin_balance, Uint128(3));
 
-        // === * it sends a transer message to the user for BUTT
+        // === * it sends a transfer message to the user for BUTT
         assert_eq!(
             handle_result_unwrapped.messages,
             vec![snip20::transfer_msg(
@@ -649,6 +664,7 @@ mod tests {
                 status: Success,
                 user_locker_response: UserLockerResponse {
                     content: content.clone(),
+                    request_log: None,
                     whitelisted_addresses: None
                 },
             })
@@ -693,7 +709,7 @@ mod tests {
             )
             .unwrap()],
         );
-        // === * it sends a UserLockerResponse with a blank string and whitelisted addresses
+        // === * it sends all details. Note that it does not store the get request from the owner.
         let handle_result_data: DepositButtcoinAnswer =
             from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
         assert_eq!(
@@ -702,6 +718,16 @@ mod tests {
                 status: Success,
                 user_locker_response: UserLockerResponse {
                     content: content,
+                    request_log: Some(vec![
+                        RequestRecord {
+                            address: HumanAddr::from("letsgobrandon"),
+                            block_height: 12345
+                        },
+                        RequestRecord {
+                            address: whitelisted_addresses[0].clone(),
+                            block_height: 12345
+                        }
+                    ]),
                     whitelisted_addresses: Some(whitelisted_addresses)
                 },
             })
@@ -755,7 +781,8 @@ mod tests {
                 status: Success,
                 user_locker_response: UserLockerResponse {
                     content: "".to_string(),
-                    whitelisted_addresses: None
+                    request_log: None,
+                    whitelisted_addresses: None,
                 },
             })
             .unwrap()

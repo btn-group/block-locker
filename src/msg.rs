@@ -1,4 +1,4 @@
-use crate::state::{SecretContract, UserLocker};
+use crate::state::{RequestRecord, SecretContract, UserLocker};
 use cosmwasm_std::{Binary, HumanAddr, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -58,5 +58,6 @@ pub enum ResponseStatus {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct UserLockerResponse {
     pub content: String,
+    pub request_log: Option<Vec<RequestRecord>>,
     pub whitelisted_addresses: Option<Vec<HumanAddr>>,
 }
