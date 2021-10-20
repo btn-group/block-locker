@@ -1,66 +1,33 @@
-# Secret Contracts Starter Pack
+# Block locker
 
-This is a template to build secret contracts in Rust to run in
-[Secret Network](https://github.com/enigmampc/SecretNetwork).
-To understand the framework better, please read the overview in the
-[cosmwasm repo](https://github.com/CosmWasm/cosmwasm/blob/master/README.md),
-and dig into the [cosmwasm docs](https://www.cosmwasm.com).
-This assumes you understand the theory and just want to get coding.
+secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg
 
-## Creating a new repo from template
-
-Assuming you have a recent version of rust and cargo installed (via [rustup](https://rustup.rs/)),
-then the following should get you a new repo to start a contract:
-
-First, install
-[cargo-generate](https://github.com/ashleygwilliams/cargo-generate).
-Unless you did that before, run this line now:
-
-```sh
-cargo install cargo-generate --features vendored-openssl
+### Testing locally
 ```
+// 1. Run chain locally
+docker run -it --rm -p 26657:26657 -p 26656:26656 -p 1337:1337 -v $(pwd):/root/code --name secretdev enigmampc/secret-network-sw-dev
 
-Now, use it to create your new contract.
-Go to the folder in which you want to place it and run:
+// 2. Access container via separate terminal window
+docker exec -it secretdev /bin/bash
 
-```sh
-cargo generate --git https://github.com/enigmampc/secret-template.git --name YOUR_NAME_HERE
+// 3. cd into code folder
+cd code
+
+// 4. Store the contract (Specify your keyring. Mine is named test etc.)
+secretcli tx compute store buttcoin.wasm.gz --from a --gas 3000000 -y --keyring-backend test
+secretcli tx compute store block-locker.wasm.gz --from a --gas 3000000 -y --keyring-backend test
+
+// 5. Init Buttcoin 
+CODE_ID=1
+INIT='{"name": "Buttcoin", "symbol": "BUTT", "decimals": 6, "initial_balances": [{"address": "secret1qvgmm2u5ptyr0sr34x0uhcd8ujw77x924m5y7m", "amount": "1000000000000000000"},{"address": "secret1jfh0w66dkr0cm0lfpevhqjdswwg4frxqf262g6", "amount": "1000000000000000000"}], "prng_seed": "testing"}'
+secretcli tx compute instantiate $CODE_ID "$INIT" --from a --label "Buttcoin" -y --keyring-backend test --gas 3000000 --gas-prices=3.0uscrt
+
+// 6. Init Block locker
+CODE_ID=2
+INIT='{"buttcoin": {"address": "secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg", "contract_hash": "4CD7F64B9ADE65200E595216265932A0C7689C4804BE7B4A5F8CEBED250BF7EA"}}'
+secretcli tx compute instantiate $CODE_ID "$INIT" --from a --label "Block locker" -y --keyring-backend test --gas 3000000 --gas-prices=3.0uscrt
+
+// 7. Create or update locker
+// https://www.base64encode.org/
+secretcli tx compute execute secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg '{ "send": { "recipient": "secret10pyejy66429refv3g35g2t7am0was7ya6hvrzf", "amount": "1000000", "msg": "eyJkZXBvc2l0X2J1dHRjb2luIjogeyJob29rIjogeyJjcmVhdGVfb3JfdXBkYXRlX2xvY2tlciI6IHsiY29udGVudCI6ICJOaWNreSBGdWVudGFzIiwgIndoaXRlbGlzdGVkX2FkZHJlc3NlcyI6IFsic2VjcmV0MSIsICJzZWNyZXQyIl19fX19" } }' --from a -y --keyring-backend test --gas 3000000 --gas-prices=3.0uscrt
 ```
-
-You will now have a new folder called `YOUR_NAME_HERE` (I hope you changed that to something else)
-containing a simple working contract and build system that you can customize.
-
-## Create a Repo
-
-After generating, you have a initialized local git repo, but no commits, and no remote.
-Go to a server (eg. github) and create a new upstream repo (called `YOUR-GIT-URL` below).
-Then run the following:
-
-```sh
-# this is needed to create a valid Cargo.lock file (see below)
-cargo check
-git checkout -b master # in case you generate from non-master
-git add .
-git commit -m 'Initial Commit'
-git remote add origin YOUR-GIT-URL
-git push -u origin master
-```
-
-## Using your project
-
-Once you have your custom repo, you should check out [Developing](./Developing.md) to explain
-more on how to run tests and develop code. Or go through the
-[online tutorial](https://www.cosmwasm.com/docs/getting-started/intro) to get a better feel
-of how to develop.
-
-[Publishing](./Publishing.md) contains useful information on how to publish your contract
-to the world, once you are ready to deploy it on a running blockchain. And
-[Importing](./Importing.md) contains information about pulling in other contracts or crates
-that have been published.
-
-You can also find lots of useful recipes in the `Makefile` which you can use
-if you have `make` installed (very recommended. at least check them out).
-
-Please replace this README file with information about your specific project. You can keep
-the `Developing.md` and `Publishing.md` files as useful referenced, but please set some
-proper description in the README.

@@ -1,12 +1,13 @@
 use crate::authorize::authorize;
 use crate::msg::ResponseStatus::Success;
 use crate::msg::{
-    DepositButtcoinAnswer, DepositButtcoinMsg, HandleMsg, InitMsg, ReceiveMsg, UserLockerResponse,
+    DepositButtcoinAnswer, DepositButtcoinMsg, HandleMsg, InitMsg, QueryMsg, ReceiveMsg,
+    UserLockerResponse,
 };
 use crate::state::{Config, UserLocker};
 use cosmwasm_std::{
     from_binary, to_binary, Api, Binary, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
-    InitResponse, Querier, StdError, StdResult, Storage, Uint128,
+    InitResponse, Querier, QueryResult, StdError, StdResult, Storage, Uint128,
 };
 use rand::Rng;
 use secret_toolkit::snip20;
@@ -56,13 +57,20 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     pad_handle_result(response, BLOCK_SIZE)
 }
 
+pub fn query<S: Storage, A: Api, Q: Querier>(
+    _deps: &Extern<S, A, Q>,
+    _msg: QueryMsg,
+) -> QueryResult {
+    to_binary("There's no query functions but doesn't seem to work on chain unless this is here.")
+}
+
 // So what's this really for then? I guess this is really for a return for the user to get some of their BUTT back and this is for people setting and getting...
 // It's a way to keep things circulating... and because it's called when a user requests a view and when they create or update, it's hard to say for sure who did what.
 // Consideing no balance is shown as well, it's not really gambling. It's just a manner of circulating the funds back to people.
 fn amount_of_buttcoin_to_send_to_user(buttcoin_balance: u128) -> u128 {
     let mut rng = rand::thread_rng();
-    let random_number: u128 = rng.gen_range(1..55);
-    let mut random_number_two = rng.gen_range(1..=5);
+    let random_number: u128 = rng.gen_range(1, 55);
+    let mut random_number_two = rng.gen_range(1, 6);
     if random_number != WINNING_NUMBER {
         random_number_two = 0
     }
