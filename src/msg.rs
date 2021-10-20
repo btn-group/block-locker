@@ -21,7 +21,7 @@ pub enum HandleMsg {
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
-pub enum DepositButtcoinAnswer {
+pub enum ReceiveAnswer {
     CreateOrUpdateLocker {
         status: ResponseStatus,
         user_locker: UserLocker,
@@ -34,7 +34,7 @@ pub enum DepositButtcoinAnswer {
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
-pub enum DepositButtcoinMsg {
+pub enum ReceiveMsg {
     CreateOrUpdateLocker {
         content: Option<String>,
         whitelisted_addresses: Option<Vec<HumanAddr>>,
@@ -47,12 +47,6 @@ pub enum DepositButtcoinMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ReceiveMsg {
-    DepositButtcoin { hook: Binary },
-}
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum ResponseStatus {

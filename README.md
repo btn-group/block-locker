@@ -29,5 +29,5 @@ secretcli tx compute instantiate $CODE_ID "$INIT" --from a --label "Block locker
 
 // 7. Create or update locker
 // https://www.base64encode.org/
-secretcli tx compute execute secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg '{ "send": { "recipient": "secret10pyejy66429refv3g35g2t7am0was7ya6hvrzf", "amount": "1000000", "msg": "eyJkZXBvc2l0X2J1dHRjb2luIjogeyJob29rIjogeyJjcmVhdGVfb3JfdXBkYXRlX2xvY2tlciI6IHsiY29udGVudCI6ICJOaWNreSBGdWVudGFzIiwgIndoaXRlbGlzdGVkX2FkZHJlc3NlcyI6IFsic2VjcmV0MSIsICJzZWNyZXQyIl19fX19" } }' --from a -y --keyring-backend test --gas 3000000 --gas-prices=3.0uscrt
+secretcli tx compute execute secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg '{ "send": { "recipient": "secret10pyejy66429refv3g35g2t7am0was7ya6hvrzf", "amount": "1000000", "msg": "eyJkZXBvc2l0X2J1dHRjb2luIjogeyJob29rIjogIiJ9fQ==" } }' --from a -y --keyring-backend test --gas 3000000 --gas-prices=3.0uscrt
 ```
