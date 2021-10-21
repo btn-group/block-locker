@@ -1,4 +1,4 @@
-use crate::state::{SecretContract, UserLocker};
+use crate::state::{SecretContract, UnlockRecord, UserLocker};
 use cosmwasm_std::{Binary, HumanAddr, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -32,13 +32,8 @@ pub enum HandleMsg {
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum ReceiveAnswer {
-    CreateOrUpdateLocker {
-        status: ResponseStatus,
-        user_locker: UserLocker,
-    },
-    UnlockLocker {
-        status: ResponseStatus,
-    },
+    CreateOrUpdateLocker { status: ResponseStatus },
+    UnlockLocker { status: ResponseStatus },
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
@@ -64,6 +59,7 @@ pub enum QueryAnswer {
         content: String,
         locked: bool,
         passphrase: String,
+        unlock_records: Vec<UnlockRecord>,
         whitelisted_addresses: Vec<HumanAddr>,
     },
 }
