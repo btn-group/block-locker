@@ -54,6 +54,20 @@ pub enum ReceiveMsg {
     },
 }
 
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryAnswer {
+    Config {
+        buttcoin: SecretContract,
+    },
+    UserLocker {
+        content: String,
+        locked: bool,
+        passphrase: String,
+        whitelisted_addresses: Vec<HumanAddr>,
+    },
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
@@ -67,18 +81,4 @@ pub enum QueryMsg {
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum ResponseStatus {
     Success,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum QueryAnswer {
-    Config {
-        buttcoin: SecretContract,
-    },
-    UserLocker {
-        content: String,
-        locked: bool,
-        passphrase: String,
-        whitelisted_addresses: Vec<HumanAddr>,
-    },
 }

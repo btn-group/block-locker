@@ -80,7 +80,7 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
     from: HumanAddr,
     config: Config,
     content: Option<String>,
-    _passphrase: Option<String>,
+    passphrase: Option<String>,
     whitelisted_addresses: Option<Vec<HumanAddr>>,
 ) -> StdResult<HandleResponse> {
     // Find or initialize User locker
@@ -95,6 +95,10 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
         });
     if content.is_some() {
         user_locker.content = content.unwrap();
+    }
+    user_locker.locked = true;
+    if passphrase.is_some() {
+        user_locker.passphrase = passphrase.unwrap();
     }
     if whitelisted_addresses.is_some() {
         user_locker.whitelisted_addresses = whitelisted_addresses.unwrap();
