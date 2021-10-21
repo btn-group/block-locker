@@ -40,12 +40,16 @@
       "type": "object",
       "required": [
         "content",
+        "locked",
         "passphrase",
         "whitelisted_addresses"
       ],
       "properties": {
         "content": {
           "type": "string"
+        },
+        "locked": {
+          "type": "boolean"
         },
         "passphrase": {
           "type": "string"
