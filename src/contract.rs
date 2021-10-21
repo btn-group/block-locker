@@ -1066,13 +1066,161 @@ mod tests {
             QueryAnswer::Config { buttcoin } => {
                 assert_eq!(buttcoin, config.buttcoin);
             }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn test_query_user_locker() {
+        let content: String = "mnemonic".to_string();
+        let passphrase: String = "passphrase".to_string();
+        let whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret12345678910")];
+        let (_init_result, mut deps) = init_helper();
+
+        // when user locker does not exist
+        // when a different user makes a request for that locker
+        // * it sends a success message with a blank user locker
+        let query_result = query(
+            &deps,
+            QueryMsg::UserLocker {
+                address: HumanAddr::from("secret5555"),
+                passphrase: "passphrase".to_string(),
+            },
+        )
+        .unwrap();
+        let query_answer: QueryAnswer = from_binary(&query_result).unwrap();
+        match query_answer {
             QueryAnswer::UserLocker {
-                content: _,
-                locked: _,
-                passphrase: _,
-                whitelisted_addresses: _,
-                unlock_records: _,
-            } => {}
+                content,
+                locked,
+                passphrase,
+                whitelisted_addresses,
+                unlock_records,
+            } => {
+                assert_eq!(content, "");
+                assert_eq!(locked, true);
+                assert_eq!(passphrase, "");
+                assert_eq!(whitelisted_addresses, vec![]);
+                assert_eq!(unlock_records, vec![]);
+            }
+            _ => {}
+        }
+
+        // when user locker exists
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
+            content: Some(content.clone()),
+            passphrase: Some(passphrase.clone()),
+            whitelisted_addresses: Some(whitelisted_addresses.clone()),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        handle_result.unwrap();
+        // = when locker is locked
+        let query_result = query(
+            &deps,
+            QueryMsg::UserLocker {
+                address: mock_user_address(),
+                passphrase: passphrase.clone(),
+            },
+        )
+        .unwrap();
+        // * it sends a success message with a blank user locker
+        let query_answer: QueryAnswer = from_binary(&query_result).unwrap();
+        match query_answer {
+            QueryAnswer::UserLocker {
+                content,
+                locked,
+                passphrase,
+                whitelisted_addresses,
+                unlock_records,
+            } => {
+                assert_eq!(content, "");
+                assert_eq!(locked, true);
+                assert_eq!(passphrase, "");
+                assert_eq!(whitelisted_addresses, vec![]);
+                assert_eq!(unlock_records, vec![]);
+            }
+            _ => {}
+        }
+        // = when locker is unlocked
+        let unlock_locker_msg = ReceiveMsg::UnlockLocker {
+            address: mock_user_address(),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: whitelisted_addresses[0].clone(),
+            from: whitelisted_addresses[0].clone(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&unlock_locker_msg).unwrap(),
+        };
+        handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        )
+        .unwrap();
+        // == when the right address, passphrase combo is sent in
+        let query_result = query(
+            &deps,
+            QueryMsg::UserLocker {
+                address: mock_user_address(),
+                passphrase: passphrase.clone(),
+            },
+        )
+        .unwrap();
+        // == it returns the contents of the locker
+        // * it sends a success message with a blank user locker
+        let query_answer: QueryAnswer = from_binary(&query_result).unwrap();
+        match query_answer {
+            QueryAnswer::UserLocker {
+                content,
+                locked,
+                passphrase,
+                whitelisted_addresses,
+                unlock_records,
+            } => {
+                assert_eq!(content, content);
+                assert_eq!(locked, false);
+                assert_eq!(passphrase, passphrase);
+                assert_eq!(whitelisted_addresses, whitelisted_addresses);
+                assert_eq!(unlock_records, unlock_records);
+            }
+            _ => {}
+        }
+        // == when the wrong address, passphrase combo is sent in
+        let query_result = query(
+            &deps,
+            QueryMsg::UserLocker {
+                address: mock_user_address(),
+                passphrase: "russ".to_string(),
+            },
+        )
+        .unwrap();
+        // == * it sends a success message with a blank user locker
+        let query_answer: QueryAnswer = from_binary(&query_result).unwrap();
+        match query_answer {
+            QueryAnswer::UserLocker {
+                content,
+                locked,
+                passphrase,
+                whitelisted_addresses,
+                unlock_records,
+            } => {
+                assert_eq!(content, "");
+                assert_eq!(locked, true);
+                assert_eq!(passphrase, "");
+                assert_eq!(whitelisted_addresses, vec![]);
+                assert_eq!(unlock_records, vec![]);
+            }
+            _ => {}
         }
     }
 }
