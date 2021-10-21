@@ -20,6 +20,40 @@
           }
         }
       }
+    },
+    {
+      "type": "object",
+      "required": [
+        "user_locker"
+      ],
+      "properties": {
+        "user_locker": {
+          "type": "object",
+          "required": [
+            "content",
+            "locked",
+            "passphrase",
+            "whitelisted_addresses"
+          ],
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "locked": {
+              "type": "boolean"
+            },
+            "passphrase": {
+              "type": "string"
+            },
+            "whitelisted_addresses": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
