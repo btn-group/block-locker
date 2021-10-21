@@ -24,6 +24,25 @@
           }
         }
       }
+    },
+    {
+      "type": "object",
+      "required": [
+        "unlock_locker"
+      ],
+      "properties": {
+        "unlock_locker": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/ResponseStatus"
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
@@ -40,12 +59,16 @@
       "type": "object",
       "required": [
         "content",
+        "locked",
         "passphrase",
         "whitelisted_addresses"
       ],
       "properties": {
         "content": {
           "type": "string"
+        },
+        "locked": {
+          "type": "boolean"
         },
         "passphrase": {
           "type": "string"

@@ -17,6 +17,7 @@ pub struct Config {
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct UserLocker {
     pub whitelisted_addresses: Vec<HumanAddr>,
+    pub locked: bool,
     pub passphrase: String,
     pub content: String,
 }

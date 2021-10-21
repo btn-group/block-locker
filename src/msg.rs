@@ -36,6 +36,9 @@ pub enum ReceiveAnswer {
         status: ResponseStatus,
         user_locker: UserLocker,
     },
+    UnlockLocker {
+        status: ResponseStatus,
+    },
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
@@ -45,6 +48,9 @@ pub enum ReceiveMsg {
         content: Option<String>,
         passphrase: Option<String>,
         whitelisted_addresses: Option<Vec<HumanAddr>>,
+    },
+    UnlockLocker {
+        address: HumanAddr,
     },
 }
 

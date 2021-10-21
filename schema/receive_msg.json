@@ -35,6 +35,25 @@
           }
         }
       }
+    },
+    {
+      "type": "object",
+      "required": [
+        "unlock_locker"
+      ],
+      "properties": {
+        "unlock_locker": {
+          "type": "object",
+          "required": [
+            "address"
+          ],
+          "properties": {
+            "address": {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {

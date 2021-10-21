@@ -84,6 +84,7 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
         .load(from.0.as_bytes())
         .unwrap_or(UserLocker {
             content: "".to_string(),
+            locked: true,
             passphrase: "".to_string(),
             whitelisted_addresses: vec![],
         });
@@ -145,6 +146,7 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
         .load(env.message.sender.0.as_bytes())
         .unwrap_or(UserLocker {
             content: "".to_string(),
+            locked: true,
             passphrase: "".to_string(),
             whitelisted_addresses: vec![],
         });
@@ -200,7 +202,38 @@ fn receive<S: Storage, A: Api, Q: Querier>(
             passphrase,
             whitelisted_addresses,
         ),
+        ReceiveMsg::UnlockLocker { address } => unlock_locker(deps, from, address, config),
     }
+}
+
+fn unlock_locker<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    from: HumanAddr,
+    address: HumanAddr,
+    config: Config,
+) -> StdResult<HandleResponse> {
+    // Find or initialize User locker
+    let mut user_locker_store = TypedStoreMut::<UserLocker, S>::attach(&mut deps.storage);
+    let mut user_locker = user_locker_store
+        .load(address.0.as_bytes())
+        .unwrap_or(UserLocker {
+            content: "".to_string(),
+            locked: true,
+            passphrase: "".to_string(),
+            whitelisted_addresses: vec![],
+        });
+    if user_locker.locked {
+        if user_locker.whitelisted_addresses.contains(&from) {
+            user_locker.locked = false;
+            user_locker_store.store(address.0.as_bytes(), &user_locker)?;
+        }
+    }
+
+    Ok(HandleResponse {
+        messages: factor_amount_to_send_to_user(deps, config, from),
+        log: vec![],
+        data: Some(to_binary(&ReceiveAnswer::UnlockLocker { status: Success })?),
+    })
 }
 
 #[cfg(test)]
