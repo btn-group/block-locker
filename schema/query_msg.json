@@ -12,6 +12,34 @@
           "type": "object"
         }
       }
+    },
+    {
+      "type": "object",
+      "required": [
+        "user_locker"
+      ],
+      "properties": {
+        "user_locker": {
+          "type": "object",
+          "required": [
+            "address",
+            "passphrase"
+          ],
+          "properties": {
+            "address": {
+              "$ref": "#/definitions/HumanAddr"
+            },
+            "passphrase": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
-  ]
+  ],
+  "definitions": {
+    "HumanAddr": {
+      "type": "string"
+    }
+  }
 }

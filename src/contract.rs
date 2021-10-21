@@ -58,6 +58,10 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
 pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryMsg) -> QueryResult {
     match msg {
         QueryMsg::Config {} => query_config(deps),
+        QueryMsg::UserLocker {
+            address,
+            passphrase,
+        } => query_user_locker(deps, address, passphrase),
     }
 }
 
@@ -158,6 +162,41 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
             status: Success,
             user_locker: user_locker,
         })?),
+    })
+}
+
+fn query_user_locker<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    address: HumanAddr,
+    passphrase: String,
+) -> QueryResult {
+    // Find or initialize User locker
+    let user_locker_store = TypedStore::<UserLocker, S>::attach(&deps.storage);
+    let user_locker = user_locker_store
+        .load(address.0.as_bytes())
+        .unwrap_or(UserLocker {
+            content: "".to_string(),
+            locked: true,
+            passphrase: "".to_string(),
+            whitelisted_addresses: vec![],
+        });
+    let mut content_to_return: String = "".to_string();
+    let mut locked_to_return: bool = true;
+    let mut passphrase_to_return: String = "".to_string();
+    let mut whitelisted_addresses_to_return: Vec<HumanAddr> = vec![];
+    if !user_locker.locked {
+        if user_locker.passphrase == passphrase {
+            content_to_return = user_locker.content;
+            locked_to_return = false;
+            passphrase_to_return = user_locker.passphrase;
+            whitelisted_addresses_to_return = user_locker.whitelisted_addresses;
+        }
+    };
+    to_binary(&QueryAnswer::UserLocker {
+        content: content_to_return,
+        locked: locked_to_return,
+        passphrase: passphrase_to_return,
+        whitelisted_addresses: whitelisted_addresses_to_return,
     })
 }
 
@@ -798,6 +837,12 @@ mod tests {
             QueryAnswer::Config { buttcoin } => {
                 assert_eq!(buttcoin, config.buttcoin);
             }
+            QueryAnswer::UserLocker {
+                content: _,
+                locked: _,
+                passphrase: _,
+                whitelisted_addresses: _,
+            } => {}
         }
     }
 }
