@@ -8,7 +8,6 @@ use cosmwasm_std::{
     from_binary, to_binary, Api, Binary, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
     InitResponse, Querier, QueryResult, StdError, StdResult, Storage, Uint128,
 };
-use rand::Rng;
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
 use secret_toolkit::utils::pad_handle_result;
@@ -17,7 +16,6 @@ use secret_toolkit::utils::pad_handle_result;
 pub const AMOUNT_FOR_TRANSACTION: u128 = 1_000_000;
 pub const BLOCK_SIZE: usize = 256;
 pub const CONFIG_KEY: &[u8] = b"config";
-pub const WINNING_NUMBER: u128 = 5;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -62,17 +60,13 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
     }
 }
 
-// So what's this really for then? I guess this is really for a return for the user to get some of their BUTT back and this is for people setting and getting...
-// It's a way to keep things circulating... and because it's called when a user requests a view and when they create or update, it's hard to say for sure who did what.
-// Consideing no balance is shown as well, it's not really gambling. It's just a manner of circulating the funds back to people.
+// This is just to keep funds circulating within the eco system
 fn amount_of_buttcoin_to_send_to_user(buttcoin_balance: u128) -> u128 {
-    let mut rng = rand::thread_rng();
-    let random_number: u128 = rng.gen_range(1, 55);
-    let mut random_number_two = rng.gen_range(1, 6);
-    if random_number != WINNING_NUMBER {
-        random_number_two = 0
+    if buttcoin_balance == 555 * AMOUNT_FOR_TRANSACTION {
+        buttcoin_balance
+    } else {
+        0
     }
-    buttcoin_balance * random_number_two / 5
 }
 
 fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
