@@ -36,12 +36,30 @@
         "Success"
       ]
     },
+    "UnlockRecord": {
+      "type": "object",
+      "required": [
+        "address",
+        "block_height"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/definitions/HumanAddr"
+        },
+        "block_height": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
     "UserLocker": {
       "type": "object",
       "required": [
         "content",
         "locked",
         "passphrase",
+        "unlock_records",
         "whitelisted_addresses"
       ],
       "properties": {
@@ -53,6 +71,12 @@
         },
         "passphrase": {
           "type": "string"
+        },
+        "unlock_records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UnlockRecord"
+          }
         },
         "whitelisted_addresses": {
           "type": "array",

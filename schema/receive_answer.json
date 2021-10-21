@@ -11,15 +11,11 @@
         "create_or_update_locker": {
           "type": "object",
           "required": [
-            "status",
-            "user_locker"
+            "status"
           ],
           "properties": {
             "status": {
               "$ref": "#/definitions/ResponseStatus"
-            },
-            "user_locker": {
-              "$ref": "#/definitions/UserLocker"
             }
           }
         }
@@ -46,40 +42,11 @@
     }
   ],
   "definitions": {
-    "HumanAddr": {
-      "type": "string"
-    },
     "ResponseStatus": {
       "type": "string",
       "enum": [
         "Success"
       ]
-    },
-    "UserLocker": {
-      "type": "object",
-      "required": [
-        "content",
-        "locked",
-        "passphrase",
-        "whitelisted_addresses"
-      ],
-      "properties": {
-        "content": {
-          "type": "string"
-        },
-        "locked": {
-          "type": "boolean"
-        },
-        "passphrase": {
-          "type": "string"
-        },
-        "whitelisted_addresses": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/HumanAddr"
-          }
-        }
-      }
     }
   }
 }
