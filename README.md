@@ -27,8 +27,8 @@ secretcli tx compute instantiate $CODE_ID "$INIT" --from a --label "Block locker
 
 // 7. Create or update locker
 // https://www.base64encode.org/
-secretcli tx compute execute secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg '{ "send": { "recipient": "secret1u52cx2m6lwqdw42eq3c03mqv6xxun78fvr7qmc", "amount": "1000000", "msg": "eyAiZ2V0X3VzZXJfbG9ja2VyIjogeyJhZGRyZXNzIjogImxldHNnb2JyYW5kb24ifSB9" } }' --from a -y --keyring-backend test --gas 3000000 --gas-prices=3.0uscrt
+secretcli tx compute execute secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg '{ "send": { "recipient": "secret1eth9g8ytx6vuy9ns4f43taq9u37gkupfn4zdek", "amount": "1000000", "msg": "eyAiZ2V0X3VzZXJfbG9ja2VyIjogeyJhZGRyZXNzIjogImxldHNnb2JyYW5kb24ifSB9" } }' --from a -y --keyring-backend test --gas 3000000 --gas-prices=3.0uscrt
 
 // 8. Get user locker
-secretcli tx compute execute secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg '{ "send": { "recipient": "secret1u52cx2m6lwqdw42eq3c03mqv6xxun78fvr7qmc", "amount": "1000000", "msg": "eyAiZ2V0X3VzZXJfbG9ja2VyIjogeyJhZGRyZXNzIjogInNlY3JldDF3Z2ZlNTJ0ejhodGhlMjM2bmgyOHkwcWFjNGRmOXlnMnFkbXJwciJ9IH0=" } }' --from a -y --keyring-backend test --gas 3000000 --gas-prices=3.0uscrt
+secretcli tx compute execute secret18vd8fpwxzck93qlwghaj6arh4p7c5n8978vsyg '{ "send": { "recipient": "secret1eth9g8ytx6vuy9ns4f43taq9u37gkupfn4zdek", "amount": "1000000", "msg": "eyAiZ2V0X3VzZXJfbG9ja2VyIjogeyJhZGRyZXNzIjogInNlY3JldDF3Z2ZlNTJ0ejhodGhlMjM2bmgyOHkwcWFjNGRmOXlnMnFkbXJwciJ9IH0=" } }' --from a -y --keyring-backend test --gas 3000000 --gas-prices=3.0uscrt
 ```
