@@ -569,6 +569,224 @@ mod tests {
     // }
 
     #[test]
+    fn test_handle_receive_unlock_locker() {
+        let content: String = "mnemonic".to_string();
+        let passphrase: String = "passphrase".to_string();
+        let whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret12345678910")];
+        let wrong_amount: Uint128 = Uint128(AMOUNT_FOR_TRANSACTION - 1);
+        // Initialize
+        let (init_result, mut deps) = init_helper();
+
+        assert!(
+            init_result.is_ok(),
+            "Init failed: {}",
+            init_result.err().unwrap()
+        );
+
+        // when user tries to unlock a locker that does not exist
+        let unlock_locker_msg = ReceiveMsg::UnlockLocker {
+            address: HumanAddr::from("rightonqueue"),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&unlock_locker_msg).unwrap(),
+        };
+        // = when sent token is not Buttcoin
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_user_address(), &[]),
+            receive_msg.clone(),
+        );
+        // = * it raises an error
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::Unauthorized { backtrace: None }
+        );
+        // = when sent token is Buttcoin
+        // == when sent amount of token is the wrong amount
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: wrong_amount,
+            msg: to_binary(&unlock_locker_msg).unwrap(),
+        };
+        // == * it raises an error
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::generic_err(format!(
+                "Amount sent in: {}. Amount required {}.",
+                wrong_amount,
+                Uint128(AMOUNT_FOR_TRANSACTION)
+            ))
+        );
+        // == when sent amount of tokens is the right amount
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&unlock_locker_msg).unwrap(),
+        };
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        let handle_result_unwrapped = handle_result.unwrap();
+        // === * it increases the balance of BUTT in config by 1
+        let config: Config = TypedStoreMut::attach(&mut deps.storage)
+            .load(CONFIG_KEY)
+            .unwrap();
+        assert_eq!(config.buttcoin_balance, Uint128(AMOUNT_FOR_TRANSACTION));
+
+        // === * it sends a transer message to the user for BUTT
+        assert_eq!(
+            handle_result_unwrapped.messages,
+            vec![snip20::transfer_msg(
+                mock_user_address(),
+                Uint128(0),
+                None,
+                BLOCK_SIZE,
+                config.buttcoin.contract_hash,
+                config.buttcoin.address,
+            )
+            .unwrap()],
+        );
+        // === * it sends success message but doesn't do anything
+        let handle_result_data: ReceiveAnswer =
+            from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
+        assert_eq!(
+            to_binary(&handle_result_data).unwrap(),
+            to_binary(&ReceiveAnswer::UnlockLocker { status: Success }).unwrap()
+        );
+
+        // when locker exists
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
+            content: Some(content.clone()),
+            passphrase: Some(passphrase.clone()),
+            whitelisted_addresses: Some(whitelisted_addresses.clone()),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        handle_result.unwrap();
+        // = when non-whitelisted user tries to unlock locker
+        let unlock_locker_msg = ReceiveMsg::UnlockLocker {
+            address: mock_user_address(),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: HumanAddr::from("1"),
+            from: HumanAddr::from("1"),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&unlock_locker_msg).unwrap(),
+        };
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        let handle_result_unwrapped = handle_result.unwrap();
+        let handle_result_data: ReceiveAnswer =
+            from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
+        // == * it sends success message
+        assert_eq!(
+            to_binary(&handle_result_data).unwrap(),
+            to_binary(&ReceiveAnswer::UnlockLocker { status: Success }).unwrap()
+        );
+        // == * it does not unlock the locker
+        // == * it does not keep a record of trying to unlock
+        let get_user_locker_msg = HandleMsg::GetUserLocker {};
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_user_address(), &[]),
+            get_user_locker_msg.clone(),
+        );
+        let handle_result_unwrapped = handle_result.unwrap();
+        let handle_result_data: HandleAnswer =
+            from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
+        assert_eq!(
+            to_binary(&handle_result_data).unwrap(),
+            to_binary(&HandleAnswer::GetUserLocker {
+                status: Success,
+                user_locker: UserLocker {
+                    content: content.clone(),
+                    locked: true,
+                    passphrase: passphrase.clone(),
+                    unlock_records: vec![],
+                    whitelisted_addresses: whitelisted_addresses.clone()
+                },
+            })
+            .unwrap()
+        );
+
+        // == when they are whitelisted to unlock the locker
+        let unlock_locker_msg = ReceiveMsg::UnlockLocker {
+            address: mock_user_address(),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: HumanAddr::from("secret12345678910"),
+            from: HumanAddr::from("secret12345678910"),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&unlock_locker_msg).unwrap(),
+        };
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        let handle_result_unwrapped = handle_result.unwrap();
+        let handle_result_data: ReceiveAnswer =
+            from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
+        // == * it sends a success message
+        assert_eq!(
+            to_binary(&handle_result_data).unwrap(),
+            to_binary(&ReceiveAnswer::UnlockLocker { status: Success }).unwrap()
+        );
+        // == * it unlocks the locker
+        // == * it keeps a record of trying to unlock
+        let get_user_locker_msg = HandleMsg::GetUserLocker {};
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_user_address(), &[]),
+            get_user_locker_msg.clone(),
+        );
+        let handle_result_unwrapped = handle_result.unwrap();
+        let handle_result_data: HandleAnswer =
+            from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
+        assert_eq!(
+            to_binary(&handle_result_data).unwrap(),
+            to_binary(&HandleAnswer::GetUserLocker {
+                status: Success,
+                user_locker: UserLocker {
+                    content: content,
+                    locked: false,
+                    passphrase: passphrase,
+                    unlock_records: vec![UnlockRecord {
+                        address: HumanAddr::from("secret12345678910"),
+                        block_height: 12_345
+                    }],
+                    whitelisted_addresses: whitelisted_addresses
+                },
+            })
+            .unwrap()
+        );
+    }
+
+    #[test]
     fn test_handle_get_user_locker() {
         let content: String = "mnemonic".to_string();
         let passphrase: String = "passphrase".to_string();
