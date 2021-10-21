@@ -279,6 +279,9 @@ fn unlock_locker<S: Storage, A: Api, Q: Querier>(
                 address: from.clone(),
                 block_height: env.block.height,
             });
+            if user_locker.unlock_records.len() > 3 {
+                user_locker.unlock_records.remove(0);
+            }
             user_locker_store.store(address.0.as_bytes(), &user_locker)?;
         }
     }
@@ -705,7 +708,10 @@ mod tests {
     fn test_handle_receive_unlock_locker() {
         let content: String = "mnemonic".to_string();
         let passphrase: String = "passphrase".to_string();
-        let whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret12345678910")];
+        let whitelisted_addresses: Vec<HumanAddr> = vec![
+            HumanAddr::from("secret12345678910"),
+            HumanAddr::from("secret555"),
+        ];
         let wrong_amount: Uint128 = Uint128(AMOUNT_FOR_TRANSACTION - 1);
         // Initialize
         let (init_result, mut deps) = init_helper();
@@ -905,13 +911,178 @@ mod tests {
             to_binary(&HandleAnswer::GetUserLocker {
                 status: Success,
                 user_locker: UserLocker {
-                    content: content,
+                    content: content.clone(),
                     locked: false,
-                    passphrase: passphrase,
+                    passphrase: passphrase.clone(),
                     unlock_records: vec![UnlockRecord {
                         address: HumanAddr::from("secret12345678910"),
                         block_height: 12_345
                     }],
+                    whitelisted_addresses: whitelisted_addresses.clone()
+                },
+            })
+            .unwrap()
+        );
+        // == * it maxes out the unlock records to zero
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
+            content: Some(content.clone()),
+            passphrase: Some(passphrase.clone()),
+            whitelisted_addresses: Some(whitelisted_addresses.clone()),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        )
+        .unwrap();
+        let unlock_locker_msg = ReceiveMsg::UnlockLocker {
+            address: mock_user_address(),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: HumanAddr::from("secret12345678910"),
+            from: HumanAddr::from("secret12345678910"),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&unlock_locker_msg).unwrap(),
+        };
+        handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        )
+        .unwrap();
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
+            content: Some(content.clone()),
+            passphrase: Some(passphrase.clone()),
+            whitelisted_addresses: Some(whitelisted_addresses.clone()),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        )
+        .unwrap();
+        let unlock_locker_msg = ReceiveMsg::UnlockLocker {
+            address: mock_user_address(),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: HumanAddr::from("secret12345678910"),
+            from: HumanAddr::from("secret12345678910"),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&unlock_locker_msg).unwrap(),
+        };
+        handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        )
+        .unwrap();
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
+            content: Some(content.clone()),
+            passphrase: Some(passphrase.clone()),
+            whitelisted_addresses: Some(whitelisted_addresses.clone()),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        )
+        .unwrap();
+        let unlock_locker_msg = ReceiveMsg::UnlockLocker {
+            address: mock_user_address(),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: HumanAddr::from("secret12345678910"),
+            from: HumanAddr::from("secret12345678910"),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&unlock_locker_msg).unwrap(),
+        };
+        handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        )
+        .unwrap();
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
+            content: Some(content.clone()),
+            passphrase: Some(passphrase.clone()),
+            whitelisted_addresses: Some(whitelisted_addresses.clone()),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        )
+        .unwrap();
+        let unlock_locker_msg = ReceiveMsg::UnlockLocker {
+            address: mock_user_address(),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: HumanAddr::from("secret555"),
+            from: HumanAddr::from("secret555"),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&unlock_locker_msg).unwrap(),
+        };
+        handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        )
+        .unwrap();
+        let get_user_locker_msg = HandleMsg::GetUserLocker {};
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_user_address(), &[]),
+            get_user_locker_msg.clone(),
+        );
+        let handle_result_unwrapped = handle_result.unwrap();
+        let handle_result_data: HandleAnswer =
+            from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
+        assert_eq!(
+            to_binary(&handle_result_data).unwrap(),
+            to_binary(&HandleAnswer::GetUserLocker {
+                status: Success,
+                user_locker: UserLocker {
+                    content: content,
+                    locked: false,
+                    passphrase: passphrase,
+                    unlock_records: vec![
+                        UnlockRecord {
+                            address: HumanAddr::from("secret12345678910"),
+                            block_height: 12_345
+                        },
+                        UnlockRecord {
+                            address: HumanAddr::from("secret12345678910"),
+                            block_height: 12_345
+                        },
+                        UnlockRecord {
+                            address: HumanAddr::from("secret555"),
+                            block_height: 12_345
+                        }
+                    ],
                     whitelisted_addresses: whitelisted_addresses
                 },
             })
