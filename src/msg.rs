@@ -8,9 +8,19 @@ pub struct InitMsg {
     pub buttcoin: SecretContract,
 }
 
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum HandleAnswer {
+    GetUserLocker {
+        status: ResponseStatus,
+        user_locker: UserLocker,
+    },
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
+    GetUserLocker {},
     Receive {
         sender: HumanAddr,
         from: HumanAddr,
@@ -26,10 +36,6 @@ pub enum ReceiveAnswer {
         status: ResponseStatus,
         user_locker: UserLocker,
     },
-    GetUserLocker {
-        status: ResponseStatus,
-        user_locker_response: UserLockerResponse,
-    },
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
@@ -37,10 +43,8 @@ pub enum ReceiveAnswer {
 pub enum ReceiveMsg {
     CreateOrUpdateLocker {
         content: Option<String>,
+        passphrase: Option<String>,
         whitelisted_addresses: Option<Vec<HumanAddr>>,
-    },
-    GetUserLocker {
-        address: HumanAddr,
     },
 }
 
@@ -53,12 +57,6 @@ pub enum QueryMsg {
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum ResponseStatus {
     Success,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct UserLockerResponse {
-    pub content: String,
-    pub whitelisted_addresses: Option<Vec<HumanAddr>>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]

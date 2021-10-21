@@ -5,6 +5,17 @@
     {
       "type": "object",
       "required": [
+        "get_user_locker"
+      ],
+      "properties": {
+        "get_user_locker": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
         "receive"
       ],
       "properties": {
