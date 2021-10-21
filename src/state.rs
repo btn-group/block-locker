@@ -3,6 +3,12 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, JsonSchema)]
+pub struct UnlockRecord {
+    pub address: HumanAddr,
+    pub block_height: u64,
+}
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, JsonSchema)]
 pub struct SecretContract {
     pub address: HumanAddr,
     pub contract_hash: String,
@@ -16,8 +22,9 @@ pub struct Config {
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct UserLocker {
-    pub whitelisted_addresses: Vec<HumanAddr>,
+    pub unlock_records: Vec<UnlockRecord>,
+    pub content: String,
     pub locked: bool,
     pub passphrase: String,
-    pub content: String,
+    pub whitelisted_addresses: Vec<HumanAddr>,
 }

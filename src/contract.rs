@@ -3,7 +3,7 @@ use crate::msg::ResponseStatus::Success;
 use crate::msg::{
     HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, ReceiveAnswer, ReceiveMsg,
 };
-use crate::state::{Config, UserLocker};
+use crate::state::{Config, UnlockRecord, UserLocker};
 use cosmwasm_std::{
     from_binary, to_binary, Api, Binary, CosmosMsg, Env, Extern, HandleResponse, HumanAddr,
     InitResponse, Querier, QueryResult, StdError, StdResult, Storage, Uint128,
@@ -88,6 +88,7 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
     let mut user_locker = user_locker_store
         .load(from.0.as_bytes())
         .unwrap_or(UserLocker {
+            unlock_records: vec![],
             content: "".to_string(),
             locked: true,
             passphrase: "".to_string(),
@@ -115,7 +116,6 @@ fn create_or_update_locker<S: Storage, A: Api, Q: Querier>(
         log: vec![],
         data: Some(to_binary(&ReceiveAnswer::CreateOrUpdateLocker {
             status: Success,
-            user_locker: user_locker,
         })?),
     })
 }
@@ -157,6 +157,7 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
             content: "".to_string(),
             locked: true,
             passphrase: "".to_string(),
+            unlock_records: vec![],
             whitelisted_addresses: vec![],
         });
 
@@ -183,17 +184,20 @@ fn query_user_locker<S: Storage, A: Api, Q: Querier>(
             content: "".to_string(),
             locked: true,
             passphrase: "".to_string(),
+            unlock_records: vec![],
             whitelisted_addresses: vec![],
         });
     let mut content_to_return: String = "".to_string();
     let mut locked_to_return: bool = true;
     let mut passphrase_to_return: String = "".to_string();
+    let mut unlock_records_to_return: Vec<UnlockRecord> = vec![];
     let mut whitelisted_addresses_to_return: Vec<HumanAddr> = vec![];
     if !user_locker.locked {
         if user_locker.passphrase == passphrase {
             content_to_return = user_locker.content;
             locked_to_return = false;
             passphrase_to_return = user_locker.passphrase;
+            unlock_records_to_return = user_locker.unlock_records;
             whitelisted_addresses_to_return = user_locker.whitelisted_addresses;
         }
     };
@@ -201,6 +205,7 @@ fn query_user_locker<S: Storage, A: Api, Q: Querier>(
         content: content_to_return,
         locked: locked_to_return,
         passphrase: passphrase_to_return,
+        unlock_records: unlock_records_to_return,
         whitelisted_addresses: whitelisted_addresses_to_return,
     })
 }
@@ -246,12 +251,13 @@ fn receive<S: Storage, A: Api, Q: Querier>(
             passphrase,
             whitelisted_addresses,
         ),
-        ReceiveMsg::UnlockLocker { address } => unlock_locker(deps, from, address, config),
+        ReceiveMsg::UnlockLocker { address } => unlock_locker(deps, env, from, address, config),
     }
 }
 
 fn unlock_locker<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
+    env: Env,
     from: HumanAddr,
     address: HumanAddr,
     config: Config,
@@ -261,6 +267,7 @@ fn unlock_locker<S: Storage, A: Api, Q: Querier>(
     let mut user_locker = user_locker_store
         .load(address.0.as_bytes())
         .unwrap_or(UserLocker {
+            unlock_records: vec![],
             content: "".to_string(),
             locked: true,
             passphrase: "".to_string(),
@@ -269,6 +276,10 @@ fn unlock_locker<S: Storage, A: Api, Q: Querier>(
     if user_locker.locked {
         if user_locker.whitelisted_addresses.contains(&from) {
             user_locker.locked = false;
+            user_locker.unlock_records.push(UnlockRecord {
+                address: from.clone(),
+                block_height: env.block.height,
+            });
             user_locker_store.store(address.0.as_bytes(), &user_locker)?;
         }
     }
@@ -847,6 +858,7 @@ mod tests {
                 locked: _,
                 passphrase: _,
                 whitelisted_addresses: _,
+                unlock_records: _,
             } => {}
         }
     }
