@@ -148,7 +148,6 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
 ) -> StdResult<HandleResponse> {
-    let config: Config = TypedStore::attach(&deps.storage).load(CONFIG_KEY)?;
     // Find or initialize User locker
     let user_locker_store = TypedStore::<UserLocker, S>::attach(&deps.storage);
     let user_locker = user_locker_store
@@ -162,7 +161,7 @@ fn get_user_locker<S: Storage, A: Api, Q: Querier>(
         });
 
     Ok(HandleResponse {
-        messages: factor_amount_to_send_to_user(deps, config, env.message.sender),
+        messages: vec![],
         log: vec![],
         data: Some(to_binary(&HandleAnswer::GetUserLocker {
             status: Success,
@@ -569,277 +568,140 @@ mod tests {
     //     );
     // }
 
-    // #[test]
-    // fn test_handle_get_user_locker() {
-    //     let content: String = "mnemonic".to_string();
-    //     let whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret12345678910")];
-    //     let wrong_amount: Uint128 = Uint128(AMOUNT_FOR_TRANSACTION - 1);
-    //     // Initialize
-    //     let (init_result, mut deps) = init_helper();
+    #[test]
+    fn test_handle_get_user_locker() {
+        let content: String = "mnemonic".to_string();
+        let passphrase: String = "passphrase".to_string();
+        let whitelisted_addresses: Vec<HumanAddr> = vec![HumanAddr::from("secret12345678910")];
+        let wrong_amount: Uint128 = Uint128(AMOUNT_FOR_TRANSACTION - 1);
+        // Initialize
+        let (init_result, mut deps) = init_helper();
 
-    //     assert!(
-    //         init_result.is_ok(),
-    //         "Init failed: {}",
-    //         init_result.err().unwrap()
-    //     );
+        assert!(
+            init_result.is_ok(),
+            "Init failed: {}",
+            init_result.err().unwrap()
+        );
 
-    //     let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
-    //         content: Some(content.clone()),
-    //         whitelisted_addresses: Some(whitelisted_addresses.clone()),
-    //     };
-    //     let receive_msg = HandleMsg::Receive {
-    //         sender: mock_user_address(),
-    //         from: mock_user_address(),
-    //         amount: Uint128(AMOUNT_FOR_TRANSACTION),
-    //         msg: to_binary(&create_or_update_locker_msg).unwrap(),
-    //     };
-    //     // = when sent token is not Buttcoin
-    //     let handle_result = handle(
-    //         &mut deps,
-    //         mock_env(mock_user_address(), &[]),
-    //         receive_msg.clone(),
-    //     );
-    //     // = * it raises an error
-    //     assert_eq!(
-    //         handle_result.unwrap_err(),
-    //         StdError::Unauthorized { backtrace: None }
-    //     );
-    //     // = when sent token is Buttcoin
-    //     // == when sent amount of token is the wrong amount
-    //     let receive_msg = HandleMsg::Receive {
-    //         sender: mock_user_address(),
-    //         from: mock_user_address(),
-    //         amount: wrong_amount,
-    //         msg: to_binary(&create_or_update_locker_msg).unwrap(),
-    //     };
-    //     // == * it raises an error
-    //     let handle_result = handle(
-    //         &mut deps,
-    //         mock_env(mock_buttcoin().address, &[]),
-    //         receive_msg.clone(),
-    //     );
-    //     assert_eq!(
-    //         handle_result.unwrap_err(),
-    //         StdError::generic_err(format!(
-    //             "Amount sent in: {}. Amount required {}.",
-    //             wrong_amount,
-    //             Uint128(AMOUNT_FOR_TRANSACTION)
-    //         ))
-    //     );
-    //     // == when sent amount of tokens is the right amount
-    //     let receive_msg = HandleMsg::Receive {
-    //         sender: mock_user_address(),
-    //         from: mock_user_address(),
-    //         amount: Uint128(AMOUNT_FOR_TRANSACTION),
-    //         msg: to_binary(&create_or_update_locker_msg).unwrap(),
-    //     };
-    //     let handle_result = handle(
-    //         &mut deps,
-    //         mock_env(mock_buttcoin().address, &[]),
-    //         receive_msg.clone(),
-    //     );
-    //     handle_result.unwrap();
+        let create_or_update_locker_msg = ReceiveMsg::CreateOrUpdateLocker {
+            content: Some(content.clone()),
+            passphrase: Some(passphrase.clone()),
+            whitelisted_addresses: Some(whitelisted_addresses.clone()),
+        };
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        // = when sent token is not Buttcoin
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_user_address(), &[]),
+            receive_msg.clone(),
+        );
+        // = * it raises an error
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::Unauthorized { backtrace: None }
+        );
+        // = when sent token is Buttcoin
+        // == when sent amount of token is the wrong amount
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: wrong_amount,
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        // == * it raises an error
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        assert_eq!(
+            handle_result.unwrap_err(),
+            StdError::generic_err(format!(
+                "Amount sent in: {}. Amount required {}.",
+                wrong_amount,
+                Uint128(AMOUNT_FOR_TRANSACTION)
+            ))
+        );
+        // == when sent amount of tokens is the right amount
+        let receive_msg = HandleMsg::Receive {
+            sender: mock_user_address(),
+            from: mock_user_address(),
+            amount: Uint128(AMOUNT_FOR_TRANSACTION),
+            msg: to_binary(&create_or_update_locker_msg).unwrap(),
+        };
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            receive_msg.clone(),
+        );
+        handle_result.unwrap();
 
-    //     // === when a user without access to the locker requests the locker
-    //     let get_user_locker_msg = ReceiveMsg::GetUserLocker {
-    //         address: mock_user_address(),
-    //     };
-    //     let receive_msg = HandleMsg::Receive {
-    //         sender: HumanAddr::from("letsgobrandon"),
-    //         from: HumanAddr::from("letsgobrandon"),
-    //         amount: Uint128(AMOUNT_FOR_TRANSACTION),
-    //         msg: to_binary(&get_user_locker_msg).unwrap(),
-    //     };
-    //     let handle_result = handle(
-    //         &mut deps,
-    //         mock_env(mock_buttcoin().address, &[]),
-    //         receive_msg.clone(),
-    //     );
-    //     let handle_result_unwrapped = handle_result.unwrap();
-    //     // === * it increases the balance of BUTT in config by 1
-    //     let config: Config = TypedStoreMut::attach(&mut deps.storage)
-    //         .load(CONFIG_KEY)
-    //         .unwrap();
-    //     assert_eq!(config.buttcoin_balance, Uint128(2 * AMOUNT_FOR_TRANSACTION));
+        // === when a user without a locker requests their locker
+        let get_user_locker_msg = HandleMsg::GetUserLocker {};
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_user_address(), &[]),
+            get_user_locker_msg.clone(),
+        );
+        let handle_result_unwrapped = handle_result.unwrap();
+        // === * it does not increase the balance of BUTT in config by 1
+        let config: Config = TypedStoreMut::attach(&mut deps.storage)
+            .load(CONFIG_KEY)
+            .unwrap();
+        assert_eq!(config.buttcoin_balance, Uint128(1 * AMOUNT_FOR_TRANSACTION));
 
-    //     // === * it sends a transer message to the user for BUTT
-    //     assert_eq!(
-    //         handle_result_unwrapped.messages,
-    //         vec![snip20::transfer_msg(
-    //             HumanAddr::from("letsgobrandon"),
-    //             Uint128(0),
-    //             None,
-    //             BLOCK_SIZE,
-    //             mock_buttcoin().contract_hash,
-    //             mock_buttcoin().address,
-    //         )
-    //         .unwrap()],
-    //     );
-    //     // === * it sends a UserLockerResponse with a blank string and no whitelisted addresses
-    //     let handle_result_data: ReceiveAnswer =
-    //         from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
-    //     assert_eq!(
-    //         to_binary(&handle_result_data).unwrap(),
-    //         to_binary(&ReceiveAnswer::GetUserLocker {
-    //             status: Success,
-    //             user_locker_response: UserLockerResponse {
-    //                 content: "".to_string(),
-    //                 whitelisted_addresses: None
-    //             },
-    //         })
-    //         .unwrap()
-    //     );
+        // === * it does not send a transer message to the user for BUTT
+        assert_eq!(handle_result_unwrapped.messages, vec![],);
+        // === * it sends a UserLocker with a blank string and no whitelisted addresses
+        let handle_result_data: HandleAnswer =
+            from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
+        assert_eq!(
+            to_binary(&handle_result_data).unwrap(),
+            to_binary(&HandleAnswer::GetUserLocker {
+                status: Success,
+                user_locker: UserLocker {
+                    content: content,
+                    locked: true,
+                    passphrase: passphrase,
+                    unlock_records: vec![],
+                    whitelisted_addresses: whitelisted_addresses
+                },
+            })
+            .unwrap()
+        );
 
-    //     // === when a user with access to the locker requests the locker but is not the owner
-    //     let get_user_locker_msg = ReceiveMsg::GetUserLocker {
-    //         address: mock_user_address(),
-    //     };
-    //     let receive_msg = HandleMsg::Receive {
-    //         sender: whitelisted_addresses[0].clone(),
-    //         from: whitelisted_addresses[0].clone(),
-    //         amount: Uint128(AMOUNT_FOR_TRANSACTION),
-    //         msg: to_binary(&get_user_locker_msg).unwrap(),
-    //     };
-    //     let handle_result = handle(
-    //         &mut deps,
-    //         mock_env(mock_buttcoin().address, &[]),
-    //         receive_msg.clone(),
-    //     );
-    //     let handle_result_unwrapped = handle_result.unwrap();
-    //     // === * it increases the balance of BUTT in config by 1
-    //     let config: Config = TypedStoreMut::attach(&mut deps.storage)
-    //         .load(CONFIG_KEY)
-    //         .unwrap();
-    //     assert_eq!(config.buttcoin_balance, Uint128(3 * AMOUNT_FOR_TRANSACTION));
+        // === when a user with no locker requests
+        let get_user_locker_msg = HandleMsg::GetUserLocker {};
+        let handle_result = handle(
+            &mut deps,
+            mock_env(mock_buttcoin().address, &[]),
+            get_user_locker_msg.clone(),
+        );
+        let handle_result_unwrapped = handle_result.unwrap();
 
-    //     // === * it sends a transer message to the user for BUTT
-    //     assert_eq!(
-    //         handle_result_unwrapped.messages,
-    //         vec![snip20::transfer_msg(
-    //             whitelisted_addresses[0].clone(),
-    //             Uint128(0),
-    //             None,
-    //             BLOCK_SIZE,
-    //             mock_buttcoin().contract_hash,
-    //             mock_buttcoin().address,
-    //         )
-    //         .unwrap()],
-    //     );
-    //     // === * it sends a UserLockerResponse with a blank string and no whitelisted addresses
-    //     let handle_result_data: ReceiveAnswer =
-    //         from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
-    //     assert_eq!(
-    //         to_binary(&handle_result_data).unwrap(),
-    //         to_binary(&ReceiveAnswer::GetUserLocker {
-    //             status: Success,
-    //             user_locker_response: UserLockerResponse {
-    //                 content: content.clone(),
-    //                 whitelisted_addresses: None
-    //             },
-    //         })
-    //         .unwrap()
-    //     );
-
-    //     // === when the owner accesses their locker
-    //     let get_user_locker_msg = ReceiveMsg::GetUserLocker {
-    //         address: mock_user_address(),
-    //     };
-    //     let receive_msg = HandleMsg::Receive {
-    //         sender: mock_user_address(),
-    //         from: mock_user_address(),
-    //         amount: Uint128(AMOUNT_FOR_TRANSACTION),
-    //         msg: to_binary(&get_user_locker_msg).unwrap(),
-    //     };
-    //     let handle_result = handle(
-    //         &mut deps,
-    //         mock_env(mock_buttcoin().address, &[]),
-    //         receive_msg.clone(),
-    //     );
-    //     let handle_result_unwrapped = handle_result.unwrap();
-    //     // === * it increases the balance of BUTT in config by 1
-    //     let config: Config = TypedStoreMut::attach(&mut deps.storage)
-    //         .load(CONFIG_KEY)
-    //         .unwrap();
-    //     assert_eq!(config.buttcoin_balance, Uint128(4 * AMOUNT_FOR_TRANSACTION));
-
-    //     // === * it sends a transer message to the user for BUTT
-    //     assert_eq!(
-    //         handle_result_unwrapped.messages,
-    //         vec![snip20::transfer_msg(
-    //             mock_user_address().clone(),
-    //             Uint128(0),
-    //             None,
-    //             BLOCK_SIZE,
-    //             mock_buttcoin().contract_hash,
-    //             mock_buttcoin().address,
-    //         )
-    //         .unwrap()],
-    //     );
-    //     // === * it sends a UserLockerResponse with a blank string and whitelisted addresses
-    //     let handle_result_data: ReceiveAnswer =
-    //         from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
-    //     assert_eq!(
-    //         to_binary(&handle_result_data).unwrap(),
-    //         to_binary(&ReceiveAnswer::GetUserLocker {
-    //             status: Success,
-    //             user_locker_response: UserLockerResponse {
-    //                 content: content,
-    //                 whitelisted_addresses: Some(whitelisted_addresses)
-    //             },
-    //         })
-    //         .unwrap()
-    //     );
-
-    //     // === when a user tries to access a locker that does not exist
-    //     let get_user_locker_msg = ReceiveMsg::GetUserLocker {
-    //         address: HumanAddr::from("thislockerdoesnotexist"),
-    //     };
-    //     let receive_msg = HandleMsg::Receive {
-    //         sender: mock_user_address(),
-    //         from: mock_user_address(),
-    //         amount: Uint128(AMOUNT_FOR_TRANSACTION),
-    //         msg: to_binary(&get_user_locker_msg).unwrap(),
-    //     };
-    //     let handle_result = handle(
-    //         &mut deps,
-    //         mock_env(mock_buttcoin().address, &[]),
-    //         receive_msg.clone(),
-    //     );
-    //     let handle_result_unwrapped = handle_result.unwrap();
-    //     // === * it increases the balance of BUTT in config by 1
-    //     let config: Config = TypedStoreMut::attach(&mut deps.storage)
-    //         .load(CONFIG_KEY)
-    //         .unwrap();
-    //     assert_eq!(config.buttcoin_balance, Uint128(5 * AMOUNT_FOR_TRANSACTION));
-
-    //     // === * it sends a transer message to the user for BUTT
-    //     assert_eq!(
-    //         handle_result_unwrapped.messages,
-    //         vec![snip20::transfer_msg(
-    //             mock_user_address(),
-    //             Uint128(0),
-    //             None,
-    //             BLOCK_SIZE,
-    //             mock_buttcoin().contract_hash,
-    //             mock_buttcoin().address,
-    //         )
-    //         .unwrap()],
-    //     );
-    //     // === * it sends a UserLockerResponse with a blank string and no whitelisted addresses
-    //     let handle_result_data: ReceiveAnswer =
-    //         from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
-    //     assert_eq!(
-    //         to_binary(&handle_result_data).unwrap(),
-    //         to_binary(&ReceiveAnswer::GetUserLocker {
-    //             status: Success,
-    //             user_locker_response: UserLockerResponse {
-    //                 content: "".to_string(),
-    //                 whitelisted_addresses: None
-    //             },
-    //         })
-    //         .unwrap()
-    //     );
-    // }
+        // === * it sends a UserLockerResponse with a blank string and no whitelisted addresses
+        let handle_result_data: HandleAnswer =
+            from_binary(&handle_result_unwrapped.data.unwrap()).unwrap();
+        assert_eq!(
+            to_binary(&handle_result_data).unwrap(),
+            to_binary(&HandleAnswer::GetUserLocker {
+                status: Success,
+                user_locker: UserLocker {
+                    content: "".to_string(),
+                    locked: true,
+                    passphrase: "".to_string(),
+                    unlock_records: vec![],
+                    whitelisted_addresses: vec![]
+                },
+            })
+            .unwrap()
+        );
+    }
 
     // === QUERY TESTS ===
 
