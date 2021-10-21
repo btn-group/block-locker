@@ -10,7 +10,7 @@ use cosmwasm_std::{
 };
 use secret_toolkit::snip20;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
-use secret_toolkit::utils::pad_handle_result;
+use secret_toolkit::utils::{pad_handle_result, pad_query_result};
 
 // pad handle responses and log attributes to blocks of 256 bytes to prevent leaking info based on response size
 pub const AMOUNT_FOR_TRANSACTION: u128 = 1_000_000;
@@ -56,13 +56,14 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
 }
 
 pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryMsg) -> QueryResult {
-    match msg {
+    let response = match msg {
         QueryMsg::Config {} => query_config(deps),
         QueryMsg::UserLocker {
             address,
             passphrase,
         } => query_user_locker(deps, address, passphrase),
-    }
+    };
+    pad_query_result(response, BLOCK_SIZE)
 }
 
 // This is just to keep funds circulating within the eco system
